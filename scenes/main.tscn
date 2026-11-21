@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[node name="Main" type="Node2D"]
+
+[node name="Title" type="Label" parent="."]
+offset_left = 120.0
+offset_top = 120.0
+offset_right = 1800.0
+offset_bottom = 400.0
+theme_override_font_sizes/font_size = 72
+text = "Battle Arena Test
+Milestone 0: the project runs."
