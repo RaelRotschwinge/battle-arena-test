@@ -11,5 +11,5 @@ func _init() -> void:
 		{"point": Vector2(1560, 800), "side": 1},
 	])
 	blast_zone = Rect2(-640, -800, 3200, 2400)
-	spawns.assign([Vector2(660, 800), Vector2(1260, 800)])
+	spawns.assign([Vector2(660, 800), Vector2(1260, 800), Vector2(860, 800), Vector2(1060, 800)])
 	respawn_point = Vector2(960, 300)

@@ -8,7 +8,6 @@ const FOLLOW := 0.12  # Share of the way to the target per tick.
 const SHAKE_TICKS := 12
 
 var sim
-var stats
 var _shake := 0.0  # Strength in pixels.
 var _shake_ticks := 0
 
@@ -53,8 +52,8 @@ func _target() -> Array:
 	for f in sim.fighters:
 		if f.out:
 			continue
-		var fighter_box := Rect2(f.position.x - stats.width / 2.0, f.position.y - stats.height,
-				stats.width, stats.height)
+		var fighter_box := Rect2(f.position.x - f.stats.width / 2.0,
+				f.position.y - f.stats.height, f.stats.width, f.stats.height)
 		bounds = fighter_box if first else bounds.merge(fighter_box)
 		first = false
 	bounds = bounds.grow_individual(MARGIN.x, MARGIN.y, MARGIN.x, MARGIN.y)

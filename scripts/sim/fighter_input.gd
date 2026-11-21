@@ -1,28 +1,37 @@
 # The buttons one player holds during one tick. The simulation reads input only through this.
+# up is the direction (on a keyboard it is also the jump key); jump is a jump button of its own
+# (gamepads), so it jumps without counting as up for an attack. run: a gamepad stick tilted all
+# the way, which runs at once.
 extends RefCounted
+
+const FIELDS := ["left", "right", "up", "down", "attack", "shield", "jump", "run"]
 
 var left := false
 var right := false
 var up := false
 var down := false
 var attack := false
+var shield := false
+var jump := false
+var run := false
 
 
 func copy_from(other) -> void:
-	left = other.left
-	right = other.right
-	up = other.up
-	down = other.down
-	attack = other.attack
+	for field in FIELDS:
+		set(field, other.get(field))
 
 
 func to_dict() -> Dictionary:
-	return {"left": left, "right": right, "up": up, "down": down, "attack": attack}
+	var data := {}
+	for field in FIELDS:
+		data[field] = get(field)
+	return data
 
 
 func from_dict(data: Dictionary) -> void:
-	left = data["left"]
-	right = data["right"]
-	up = data["up"]
-	down = data["down"]
-	attack = data["attack"]
+	for field in FIELDS:
+		set(field, data.get(field, false))
+
+
+func dir() -> int:
+	return int(right) - int(left)

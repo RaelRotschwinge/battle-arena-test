@@ -6,13 +6,16 @@ const FighterStats := preload("res://scripts/sim/fighter_stats.gd")
 const FighterState := preload("res://scripts/sim/fighter_state.gd")
 const TuningStore := preload("res://scripts/view/tuning_store.gd")
 
-const HELP := "Player 1: W A S D + Space     Player 2: arrow keys + Enter" \
-		+ "     F1 info     F2 tuning     F5 restart"
+const HELP := "P1: W A S D, Space attack, left Shift shield     P2: arrows, Enter attack," \
+		+ " right Shift shield     Esc pause     F1 info     F2 tuning     F5 restart"
 
 var sim
-var stats  # Set before the node enters the tree.
+var stats  # The tuned fighter's stats (the first player's).
+var fighter_id := "test"
 
 var _info: Label
+var _root: Control
+var _title: Label
 var _panel: PanelContainer
 var _status: Label
 var _rows := {}  # Value name -> [slider, value label].
@@ -42,8 +45,13 @@ func _ready() -> void:
 	_outline(_info)
 	root.add_child(_info)
 
-	_panel = _build_tuning()
-	root.add_child(_panel)
+	_root = root
+
+
+func _ensure_tuning() -> void:
+	if _panel == null:
+		_panel = _build_tuning()
+		_root.add_child(_panel)
 
 
 func toggle_info() -> bool:
@@ -52,7 +60,10 @@ func toggle_info() -> bool:
 
 
 func toggle_tuning() -> void:
+	_ensure_tuning()
 	_panel.visible = not _panel.visible
+	_title.text = "Tuning %s: changes apply at once" % stats.fighter_name
+	_refresh_sliders()
 
 
 func _process(_delta: float) -> void:
@@ -61,9 +72,10 @@ func _process(_delta: float) -> void:
 	var lines := PackedStringArray(["tick %d" % sim.tick])
 	for i in sim.fighters.size():
 		var f = sim.fighters[i]
-		lines.append("P%d  %s  position %.0f, %.0f  speed %.1f, %.1f  jumps %d%s%s%s%s%s" % [
+		lines.append("P%d  %s  position %.0f, %.0f  speed %.1f, %.1f  jumps %d  shield %d%s%s%s%s%s" % [
 			i + 1, FighterState.Mode.keys()[f.mode].to_lower(), f.position.x, f.position.y,
-			f.velocity.x, f.velocity.y, f.jumps_left, "  running" if f.running else "",
+			f.velocity.x, f.velocity.y, f.jumps_left, int(f.shield_hp),
+			"  running" if f.running else "",
 			"  fast fall" if f.fast_falling else "",
 			"  %s %d" % [f.attack, f.attack_ticks] if f.attack != "" else "",
 			"  hitstun %d" % f.hitstun if f.hitstun > 0 else "",
@@ -87,9 +99,8 @@ func _build_tuning() -> PanelContainer:
 	var box := VBoxContainer.new()
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(box)
-	var title := Label.new()
-	title.text = "Tuning: changes apply at once"
-	box.add_child(title)
+	_title = Label.new()
+	box.add_child(_title)
 
 	for entry in FighterStats.TUNABLE:
 		var key: String = entry[0]
@@ -138,7 +149,7 @@ func _on_slider_changed(value: float, key: String) -> void:
 
 
 func _on_save() -> void:
-	var error := TuningStore.save(stats)
+	var error := TuningStore.save(stats, fighter_id)
 	if error == OK:
 		_status.text = "Saved. These values load at every start."
 	else:

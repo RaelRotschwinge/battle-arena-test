@@ -72,15 +72,24 @@ func test_hanging_too_long_lets_go() -> void:
 	assert_eq(fighter().mode, Mode.AIR, "let go by itself")
 
 
-func test_a_held_ledge_cannot_be_grabbed_by_another_fighter() -> void:
+func test_a_ledge_holds_one_fighter_and_a_new_grabber_takes_it_over() -> void:
 	var s := MatchSim.new(TestArena.new(), 2)
 	for f in s.fighters:
 		f.position = Vector2(320.0, 840.0)
 		f.mode = Mode.AIR
 	for t in 10:
 		s.step([FighterInput.new(), FighterInput.new()])
-	assert_eq(s.fighters[0].mode, Mode.LEDGE, "the first fighter hangs")
+	assert_eq(s.fighters[0].mode, Mode.LEDGE, "grabbing at the same time: the first one hangs")
 	assert_true(s.fighters[1].mode != Mode.LEDGE, "the second does not")
+	s = MatchSim.new(TestArena.new(), 2)
+	s.fighters[0].position = Vector2(320.0, 840.0)
+	s.fighters[0].mode = Mode.AIR
+	s.fighters[1].position = Vector2(320.0, 700.0)
+	s.fighters[1].mode = Mode.AIR
+	for t in 30:
+		s.step([FighterInput.new(), FighterInput.new()])
+	assert_eq(s.fighters[1].mode, Mode.LEDGE, "the later grabber hangs")
+	assert_true(s.fighters[0].mode != Mode.LEDGE, "the one hanging before is pushed off")
 
 
 func test_against_the_wall_and_up_jumps_off_the_wall() -> void:

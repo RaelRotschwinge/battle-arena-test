@@ -7,6 +7,7 @@ const STOCK_SIZE := 18.0
 
 var sim
 var colors: Array = []
+var labels: Array = []  # Per fighter: the player's name, for example "P1" or "CPU".
 
 var _root: Control
 var _panels := []  # Per player: [damage label, stock row].
@@ -32,7 +33,7 @@ func _ready() -> void:
 	_win_hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_win_hint.offset_top = -20.0
 	_win_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_win_hint.text = "Attack: new match"
+	_win_hint.text = ""
 	_root.add_child(_win_hint)
 
 
@@ -50,11 +51,11 @@ func reset() -> void:
 		box.anchor_bottom = 1.0
 		box.offset_left = (i - count / 2.0) * PANEL_WIDTH
 		box.offset_right = box.offset_left + PANEL_WIDTH
-		box.offset_top = -190.0
-		box.offset_bottom = -64.0
+		box.offset_top = -224.0
+		box.offset_bottom = -92.0
 		box.alignment = BoxContainer.ALIGNMENT_END
 		var name_label := _label(28)
-		name_label.text = "P%d" % (i + 1)
+		name_label.text = "%s  %s" % [labels[i], sim.fighters[i].stats.fighter_name]
 		name_label.add_theme_color_override("font_color", colors[i])
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		var damage := _label(64)
@@ -93,9 +94,14 @@ func refresh() -> void:
 			stocks.add_child(stock)
 
 
+func hide_winner() -> void:
+	_win.visible = false
+	_win_hint.visible = false
+
+
 func show_winner(can_restart: bool) -> void:
 	if sim.winner >= 0:
-		_win.text = "Player %d wins!" % (sim.winner + 1)
+		_win.text = "%s wins!" % labels[sim.winner]
 		_win.add_theme_color_override("font_color", colors[sim.winner])
 	else:
 		_win.text = "Draw!"

@@ -1,20 +1,22 @@
-# Draws one fighter as a simple shape (game design, "Fighters": a test fighter until M4), its
-# attacks, and with the info overlay its hurtbox and hitbox.
+# Draws one fighter (game design, "Fighters"), its attacks, its shield and dodges, and with the
+# info overlay its hurtbox and hitbox. The shape comes from the fighter's look (fighter_look.gd).
 extends Node2D
 
 const Mode = preload("res://scripts/sim/fighter_state.gd").Mode
 const FighterCombat := preload("res://scripts/sim/fighter_combat.gd")
+const FighterDefense := preload("res://scripts/sim/fighter_defense.gd")
+const FighterLook := preload("res://scripts/view/fighter_look.gd")
 
 const HURTBOX_COLOR := Color(1.0, 0.9, 0.2, 0.9)
 const HITBOX_COLOR := Color(1.0, 0.2, 0.2, 0.45)
 const PLATFORM_COLOR := Color("8a93a8")
 
 var fighter
-var stats
-var color := Color.WHITE
+var color := Color.WHITE  # The player's color: label, outline and shield.
 var label := ""
 var show_boxes := false
 var _respawns := 0
+var _ticks := 0
 
 
 # Called every tick after the simulation step.
@@ -24,29 +26,46 @@ func sync() -> void:
 	if fighter.respawns != _respawns:
 		_respawns = fighter.respawns
 		reset_physics_interpolation()
+	_ticks += 1
 	queue_redraw()
 
 
 func _draw() -> void:
-	var w: float = stats.width
-	var h: float = stats.height
-	var body := Rect2(-w / 2.0, -h, w, h)
-	if fighter.hitlag > 0 and fighter.mode == Mode.HITSTUN:
-		body.position.x += 5.0 if fighter.hitlag % 2 == 0 else -5.0  # Shakes in the hit pause.
+	var s = fighter.stats
+	var w: float = s.width
+	var h: float = s.height
+	var shake := Vector2.ZERO
+	if fighter.hitlag > 0 and fighter.mode == Mode.HITSTUN or fighter.mode == Mode.HELD:
+		shake.x = 5.0 if _ticks % 2 == 0 else -5.0  # Shakes in the hit pause and when held.
 	if fighter.mode == Mode.RESPAWN:
 		draw_rect(Rect2(-w, 0.0, w * 2.0, 12.0), PLATFORM_COLOR)
 
-	var body_color := color
+	var tint := Color(1, 1, 1, 1)
 	if fighter.mode == Mode.HITSTUN:
-		body_color = color.lerp(Color.WHITE, 0.5) if fighter.hitlag > 0 else color.darkened(0.25)
-	if fighter.invuln > 0 and (fighter.invuln / 4) % 2 == 0:
-		body_color.a = 0.35  # Blinks while it cannot be hit.
-	draw_rect(body, body_color)
-	if fighter.mode == Mode.LEDGE:  # Hands on the ledge.
-		draw_rect(Rect2(fighter.facing * w / 2.0 - 8.0, -h - 6.0, 16.0, 14.0), color.lightened(0.4))
-	var eye := body.position + Vector2(w / 2.0 + fighter.facing * w * 0.22, h * 0.25)
-	draw_circle(eye, 8.0, Color.WHITE)
-	draw_circle(eye + Vector2(fighter.facing * 3.0, 0.0), 4.0, Color.BLACK)
+		tint = Color(1.6, 1.6, 1.6) if fighter.hitlag > 0 else Color(0.8, 0.8, 0.8)
+	if FighterDefense.intangible(fighter) or fighter.mode == Mode.TECH:
+		tint = Color(1.5, 1.5, 1.8, 0.45)
+	elif fighter.invuln > 0 and (fighter.invuln / 4) % 2 == 0:
+		tint.a = 0.35  # Blinks while it cannot be hit.
+	FighterLook.draw(self, fighter, color, tint, shake, _ticks)
+
+	if fighter.mode == Mode.SHIELD:
+		var radius := FighterDefense.shield_radius(fighter)
+		var flash: bool = fighter.shield_stun > 0 and _ticks % 4 < 2
+		var shield_color := color.lightened(0.35)
+		shield_color.a = 0.55 if flash else 0.32
+		var middle := Vector2(0.0, -h / 2.0)
+		draw_circle(middle, radius, shield_color)
+		draw_arc(middle, radius, 0.0, TAU, 40, Color(1, 1, 1, 0.6), 3.0)
+	elif fighter.mode == Mode.SHIELD_BREAK:  # Dizzy: stars circle above the head.
+		for n in 3:
+			var turn := _ticks * 0.12 + TAU * n / 3.0
+			draw_circle(Vector2(cos(turn) * 34.0, -h - 18.0 + sin(turn) * 8.0), 6.0,
+					Color("ffe066"))
+	elif fighter.mode == Mode.GRAB:  # The arm holding the other fighter.
+		draw_rect(Rect2(Vector2(0.0 if fighter.facing > 0 else -w * 0.9, -h * 0.62),
+				Vector2(w * 0.9, 12.0)), color.lightened(0.3))
+
 	draw_string(ThemeDB.fallback_font, Vector2(-w, -h - 14.0), label, HORIZONTAL_ALIGNMENT_CENTER,
 			w * 2.0, 30, color)
 
@@ -56,7 +75,7 @@ func _draw() -> void:
 		draw_rect(local, Color(color.lightened(0.55), 0.75))
 		draw_rect(local, Color.WHITE, false, 3.0)
 	elif FighterCombat.in_startup(fighter):  # Wind-up: a hint of where the attack will come.
-		var box: Rect2 = FighterCombat.data(fighter.attack)["box"]
+		var box: Rect2 = FighterCombat.data(fighter)["box"]
 		var x: float = box.position.x if fighter.facing > 0 else -box.end.x
 		draw_rect(Rect2(Vector2(x, box.position.y), box.size), Color(color.lightened(0.55), 0.18))
 

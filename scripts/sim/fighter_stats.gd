@@ -1,6 +1,9 @@
-# Movement values of a fighter, shared by all fighters until M4 brings fighters of their own.
-# Units: pixels and ticks (60 ticks per second). Starting values, tuned in play.
+# The values of a fighter kind: movement, weight, size and its moves (attacks.gd format). The
+# defaults are the test fighter; each fighter in fighters/ changes some of them. Units: pixels and
+# ticks (60 ticks per second). Starting values, tuned in play.
 extends RefCounted
+
+const Attacks := preload("res://scripts/sim/attacks.gd")
 
 # Name, lowest value, highest value, step: what the tuning panel offers.
 const TUNABLE := [
@@ -51,9 +54,11 @@ var wall_jump_speed := 15.0
 var wall_jump_push := 8.0  # Speed away from the wall.
 var max_wall_jumps := 3  # Per time in the air; landing or grabbing a ledge gives them back.
 var ledge_climb_ticks := 12
-var ledge_hang_ticks := 300  # Hanging longer than this lets go by itself.
+var ledge_hang_ticks := 180  # Hanging longer than this lets go by itself.
 var ledge_regrab_ticks := 30  # After letting go, no ledge can be grabbed this long.
-var lift_speed := 13.0  # Upward speed while the up air carries the fighter up.
+var lift_speed := 13.0  # Upward speed while the up air carries the fighter up,
+var lift_ticks := 10  # for this many ticks of the up air; 0: no lift.
+var air_jumps := 1  # Jumps in the air (the double jump).
 var weight := 100.0  # Heavier fighters fly less far (game design, "Core rules").
 var knockback_scale := 1.0  # Scales every launch.
 var hitstun_factor := 1.5  # Hitstun ticks per pixel per tick of launch speed.
@@ -63,6 +68,9 @@ var respawn_wait_ticks := 120  # The respawn platform holds the fighter at most 
 var respawn_invuln_ticks := 120
 var width := 60.0
 var height := 100.0
+var fighter_name := "Test"
+var look := {"shape": "test", "colors": []}  # How the view draws it (fighter_look.gd).
+var attacks: Dictionary = Attacks.ATTACKS
 
 
 func set_value(key: String, value: float) -> void:
