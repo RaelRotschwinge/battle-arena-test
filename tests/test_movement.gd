@@ -119,7 +119,7 @@ func test_walking_off_the_edge_falls_with_the_double_jump_ready() -> void:
 func test_leaving_the_blast_zone_respawns_above_the_arena() -> void:
 	fighter().position = Vector2(1800.0, 800.0)
 	fighter().mode = Mode.AIR
-	hold([], 240)
+	hold([], 300)
 	assert_eq(fighter().respawns, 1, "respawned once")
 	assert_eq(fighter().mode, Mode.GROUND, "landed after the respawn")
 	assert_eq(fighter().position, Vector2(960.0, 800.0), "in the middle of the main platform")

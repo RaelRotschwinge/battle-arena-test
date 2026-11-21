@@ -29,15 +29,19 @@ deep enough to keep playing.
   ```
 
   `base_knockback`, `knockback_growth` and the launch angle belong to each attack; `weight` to each
-  fighter (100 is average).
+  fighter (100 is average). The launch speed is in pixels per tick.
 - **Hitstun.** After a launch the target cannot act for a number of ticks that grows with the
-  launch speed (starting value: `launch_speed * 0.4` ticks).
+  launch speed (starting value: `launch_speed * 1.5` ticks). In hitstun the target falls with half
+  the gravity and the launch fades slowly, so strong hits carry it far. A target that hits the
+  ground fast in hitstun bounces off it once; slower, it lands and can act again.
 - **Blast zones.** A rectangle well outside the visible arena. A fighter whose body leaves it loses
   a life.
 - **Lives.** 3 lives per fighter by default. The last fighter with lives left wins. A time mode
   (most knockouts in a set time) comes later.
-- **Respawn.** After a lost life the fighter returns on a platform above the arena at 0 %, with
-  2 seconds of invulnerability.
+- **Respawn.** After a lost life the fighter returns on a platform above the arena at 0 %. The
+  platform holds it until its player presses a key, at most 2 seconds; the key acts at once.
+  Leaving the platform gives 2 seconds of invulnerability, shown by blinking. On the platform the
+  fighter cannot be hit either.
 
 ## Movement
 
@@ -51,7 +55,7 @@ deep enough to keep playing.
 | Drop through | M1 | Down on a thin platform drops through it |
 | Ledge grab | M1 | A falling fighter next to a ledge hangs on it (see below) |
 | Wall jump | M1 | Pressing against a wall and up jumps off the wall (see below) |
-| Recovery move | M2 | Up and attack in the air: a move upwards to get back to the arena |
+| Recovery move | M2 | Up and attack in the air: an upward attack that carries the fighter up, once per time in the air (section "Combat") |
 | Shield and dodge | M3 | Blocks hits for a while; a dodge gives short invulnerability. Keys open (Open decisions, 4) |
 
 **Ledges.** The top corners of the main platform are ledges. A fighter falling past one close
@@ -71,27 +75,50 @@ panel (F2) changes them while playing.
 
 ## Combat
 
-Attacks have startup, active and recovery ticks (60 ticks per second). Each attack has one or
-more hitboxes; each fighter has hurtboxes. A hitbox that touches a hurtbox during its active ticks
-deals damage and knockback once per attack.
+Attacks have startup, active and recovery ticks (60 ticks per second). Each attack has one
+hitbox; each fighter's body is its hurtbox. A hitbox that touches a hurtbox during its active
+ticks deals damage and knockback once per attack. Hits that land in the same tick all count, so
+two fighters hitting each other at once both get hit (a trade). A fighter hanging on a ledge can be
+hit and is knocked off it.
 
-| Attack | Milestone |
-|---|---|
-| Light attacks on the ground: neutral, side, up | M2 |
-| Air attacks: neutral, forward, up | M2 |
-| Ground pound (down and attack in the air) | M2 |
-| Recovery move (up and attack in the air) | M2 |
-| Back air; special moves (keys open, Open decisions 4) | M4 |
-| Strong attacks (charged) | M4 |
-| Grab and throw | open |
+| Attack | Keys | Milestone |
+|---|---|---|
+| Jab | Attack on the ground, no direction | M2 |
+| Side attack | Left or right and attack on the ground; the fighter turns to that side | M2 |
+| Up attack | Up and attack on the ground, or attack during the take-off of a jump | M2 |
+| Low kick | Down and attack on the ground: quick, flat and forward, pushes the opponent away low | M2 |
+| Neutral air | Attack in the air, no direction: hits all around, launches away from the attacker | M2 |
+| Forward air | Left or right and attack in the air; the fighter turns to that side | M2 |
+| Recovery move | Up and attack in the air (see below) | M2 |
+| Ground pound | Down and attack in the air (see below) | M2 |
+| Back air; special moves (keys open, Open decisions 4) | | M4 |
+| Strong attacks (charged) | | M4 |
+| Grab and throw | | open |
+
+The starting values of every attack (ticks, hitbox, damage, knockback and angle) are in
+`scripts/sim/attacks.gd`. Starting KO points of the side attack, against a fighter that steers
+back: about 100 % near the edge, about 155 % from the middle of the arena; the up attack about
+125 %.
+
+**Air attacks** allow steering and fast fall, but no jumps while they last. Landing during one ends
+it with a short landing lag (starting value: 6 ticks). Grabbing a ledge ends it too.
+
+**Recovery move.** Up and attack in the air: an upward attack that carries the fighter up while its
+hitbox is out (starting value: 13 pixels per tick for 12 ticks), with steering. There is no other
+up attack in the air. It works once per time in the air; landing, grabbing a ledge or being hit
+gives it back. The double jump stays available.
 
 **Ground pound.** Down and attack in the air: the fighter stops in the air for a moment (starting
 value: 6 ticks), then drops straight down fast (starting value: twice the fast-fall speed) until
-it lands. It hits every fighter it meets on the way down. Landing ends it with a short recovery
-(starting value: 12 ticks).
+it lands. It hits every fighter it meets on the way down and launches it downward; a fighter on
+the ground bounces up. Landing ends it with a short recovery (starting value: 12 ticks).
 
-**Hit feel:** a short hit pause on both fighters (more for stronger hits), a hit effect, light
-screen shake on strong hits.
+**Hit feel:** a short hit pause on both fighters (starting value: 3 ticks plus half a tick per
+point of damage) in which the target shakes, a hit effect, light screen shake on strong hits and
+on a knockout. Keys pressed during the hit pause count right after it.
+
+**Match end.** When only one fighter has lives left, the win screen names the winner; after a
+second, an attack key starts a new match.
 
 ## Fighters
 
@@ -125,17 +152,19 @@ place. Every device has the same actions, so no player has more moves than anoth
 | Attack | Space | Enter (both Enter keys) | X (left button) |
 | Pause | Esc | Esc | Start |
 
-**The direction held picks the attack.** No direction gives the neutral attack, left or right the
-side attack, up the up attack, down the down attack. In the air the same keys give the air
-attacks; up and attack is the recovery move, down and attack the ground pound (section "Combat").
+**The direction held picks the attack.** On the ground, no direction gives the jab, left or right
+the side attack, up the up attack, down the low kick. In the air, no direction gives the neutral
+air, left or right the forward air, up the recovery move, down the ground pound (section
+"Combat"). Attack and a direction pressed in the same tick give the attack, not the jump or the
+drop through.
 
 **Up attack on the ground.** Up starts a jump after a short take-off (starting value: 3 ticks).
 Pressing attack during the take-off gives the up attack instead of the jump.
 
 Players join by pressing their attack key or button. Remapping keys comes later.
 
-**Testing aids:** F1 shows the fighters' state and the blast zone, F2 opens the tuning panel,
-F5 restarts the match.
+**Testing aids:** F1 shows the fighters' state, their hurtboxes and hitboxes and the blast zone,
+F2 opens the tuning panel, F5 restarts the match.
 
 ## Game modes
 

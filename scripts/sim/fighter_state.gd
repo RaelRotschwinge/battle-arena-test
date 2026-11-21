@@ -4,12 +4,13 @@ extends RefCounted
 
 const FighterInput := preload("res://scripts/sim/fighter_input.gd")
 
-enum Mode { GROUND, JUMP_SQUAT, AIR, LEDGE, CLIMB }
+enum Mode { GROUND, JUMP_SQUAT, AIR, LEDGE, CLIMB, HITSTUN, RESPAWN }
 
 const _FIELDS := [
 	"position", "velocity", "mode", "mode_ticks", "facing", "running", "jumps_left",
-	"wall_jumps_used", "fast_falling", "jump_rising", "drop_ticks", "ledge", "ledge_cooldown",
-	"tap_dir", "ticks_since_tap", "respawns",
+	"wall_jumps_used", "recovery_used", "fast_falling", "jump_rising", "drop_ticks", "ledge",
+	"ledge_cooldown", "tap_dir", "ticks_since_tap", "respawns", "damage", "stocks", "out",
+	"attack", "attack_ticks", "hit_mask", "hitstun", "hitlag", "invuln", "lag",
 ]
 
 var position := Vector2.ZERO  # Feet, horizontal middle. Pixels, y points down.
@@ -28,6 +29,17 @@ var ledge_cooldown := 0  # Ticks left after letting go of a ledge before one can
 var tap_dir := 0  # Direction of the last left or right tap, for the double tap to run.
 var ticks_since_tap := 1000
 var respawns := 0  # Counts respawns, so the view knows when the fighter jumped to a new place.
+var recovery_used := false  # The recovery move was used in this time in the air.
+var damage := 0.0  # Percent.
+var stocks := 0  # Lives left.
+var out := false  # No lives left: out of the match.
+var attack := ""  # Name of the current attack (attacks.gd), "" for none.
+var attack_ticks := 0  # Ticks since the attack began.
+var hit_mask := 0  # Bit per fighter index already hit by the current attack.
+var hitstun := 0  # Ticks left in which the fighter, launched by a hit, cannot act.
+var hitlag := 0  # Ticks left of the hit pause: the fighter stands frozen.
+var invuln := 0  # Ticks left in which hits do not touch the fighter.
+var lag := 0  # Ticks left in which the fighter cannot act, after landing from an attack.
 var prev_input := FighterInput.new()  # The input of the previous tick, to see new presses.
 
 

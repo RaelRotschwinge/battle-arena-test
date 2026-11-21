@@ -1,5 +1,5 @@
 # Aids for trying and tuning the game by hand: a help line, the info overlay (F1) and the tuning
-# panel (F2). The panel changes the movement values at once; "Save" keeps them for the next start.
+# panel (F2). The panel changes the fighter values at once; "Save" keeps them for the next start.
 extends CanvasLayer
 
 const FighterStats := preload("res://scripts/sim/fighter_stats.gd")
@@ -61,10 +61,13 @@ func _process(_delta: float) -> void:
 	var lines := PackedStringArray(["tick %d" % sim.tick])
 	for i in sim.fighters.size():
 		var f = sim.fighters[i]
-		lines.append("P%d  %s  position %.0f, %.0f  speed %.1f, %.1f  jumps %d%s%s" % [
+		lines.append("P%d  %s  position %.0f, %.0f  speed %.1f, %.1f  jumps %d%s%s%s%s%s" % [
 			i + 1, FighterState.Mode.keys()[f.mode].to_lower(), f.position.x, f.position.y,
 			f.velocity.x, f.velocity.y, f.jumps_left, "  running" if f.running else "",
-			"  fast fall" if f.fast_falling else ""])
+			"  fast fall" if f.fast_falling else "",
+			"  %s %d" % [f.attack, f.attack_ticks] if f.attack != "" else "",
+			"  hitstun %d" % f.hitstun if f.hitstun > 0 else "",
+			"  hitlag %d" % f.hitlag if f.hitlag > 0 else ""])
 	_info.text = "\n".join(lines)
 
 
@@ -75,9 +78,15 @@ func _build_tuning() -> PanelContainer:
 	panel.offset_left = -640.0
 	panel.offset_right = -16.0
 	panel.offset_top = 16.0
+	panel.anchor_bottom = 1.0
+	panel.offset_bottom = -64.0
 	panel.visible = false
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
 	var box := VBoxContainer.new()
-	panel.add_child(box)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(box)
 	var title := Label.new()
 	title.text = "Tuning: changes apply at once"
 	box.add_child(title)
