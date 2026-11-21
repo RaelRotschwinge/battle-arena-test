@@ -15,7 +15,7 @@ const _FIELDS := [
 	"wall_jumps_used", "lift_used", "lifting", "fast_falling", "jump_rising", "drop_ticks",
 	"ledge", "ledge_cooldown", "tap_dir", "ticks_since_tap", "ticks_since_up", "ticks_since_down",
 	"attack_buffer", "jump_buffer", "shield_buffer", "respawns", "damage", "stocks", "out",
-	"attack", "attack_ticks", "hit_mask", "hitstun", "hitstun_total", "hitlag", "launch_pending",
+	"attack", "attack_ticks", "hit_mask", "attack_hits", "hitstun", "hitstun_total", "hitlag", "launch_pending",
 	"combo_hits", "invuln", "lag", "shield_hp", "shield_rest", "shield_stun", "shield_push",
 	"shield_drop", "ticks_since_shield", "dodge", "dodge_dir", "dodge_streak",
 	"ticks_since_dodge", "air_dodge_used", "tech_window", "tech_lockout", "ledge_invuln_ok",
@@ -52,6 +52,7 @@ var out := false  # No lives left: out of the match.
 var attack := ""  # Name of the current attack (the fighter's moves), "" for none.
 var attack_ticks := 0  # Ticks since the attack began.
 var hit_mask := 0  # Bit per fighter index already hit by the current attack.
+var attack_hits := 0  # Hits the current attack has dealt (stale moves count an attack once).
 var hitstun := 0  # Ticks left in which the fighter, launched by a hit, cannot act.
 var hitstun_total := 0  # The hitstun of the last launch, for the early way out.
 var hitlag := 0  # Ticks left of the hit pause: the fighter stands frozen.

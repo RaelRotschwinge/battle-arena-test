@@ -4,8 +4,10 @@ A 2D platform fighter for 2 to 4 players. Every hit raises the target's damage p
 higher it is, the farther the target flies. Knock your opponents out of the arena to take their
 lives. The last fighter standing wins.
 
-**Status:** milestone 3, match flow: menus, 2 to 4 players on keyboard and gamepads, computer
-opponents in three levels, shield, dodges, grabs and the ways out of combos, on the test arena.
+**Status:** milestone 4, content and feel: three fighters (Kade, Pip, Brum), three arenas
+(Pebble, Terraces, Ferry) and the test arena, menus, 2 to 4 players on keyboard and gamepads,
+computer opponents in three levels, shield, dodges, grabs and the ways out of combos, effects,
+sounds and music made in code.
 
 ## Controls
 

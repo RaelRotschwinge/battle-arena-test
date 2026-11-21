@@ -1,7 +1,10 @@
-# The arenas to choose from (game design, "Arenas").
+# The arenas to choose from (game design, "Arenas"). The test arena stays for training.
 extends RefCounted
 
 const ARENAS := {
+	"pebble": preload("res://arenas/pebble.gd"),
+	"terraces": preload("res://arenas/terraces.gd"),
+	"ferry": preload("res://arenas/ferry.gd"),
 	"test": preload("res://arenas/test_arena.gd"),
 }
 

@@ -29,6 +29,5 @@ static func save(stats, fighter_id: String = "test") -> Error:
 	return config.save(PATH)
 
 
-# The test fighter keeps the section name of the first version of this file.
 static func _section(fighter_id: String) -> String:
-	return "fighter" if fighter_id == "test" else "fighter_" + fighter_id
+	return "fighter_" + fighter_id

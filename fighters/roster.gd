@@ -1,11 +1,14 @@
 # The fighters to choose from (game design, "Fighters"). make() builds a fighter's stats: the test
-# fighter's values with the fighter's own changes and moves.
+# fighter's values with the fighter's own changes and moves. "test" is the plain test fighter,
+# kept for tests and tuning; it is not offered in the menus.
 extends RefCounted
 
 const FighterStats := preload("res://scripts/sim/fighter_stats.gd")
 
 const FIGHTERS := {
-	"test": null,
+	"kade": preload("res://fighters/kade.gd"),
+	"pip": preload("res://fighters/pip.gd"),
+	"brum": preload("res://fighters/brum.gd"),
 }
 
 

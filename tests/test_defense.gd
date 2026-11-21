@@ -288,8 +288,11 @@ func test_long_combos_get_shorter_hitstun() -> void:
 	FighterCombat.apply_hit(f, a_up, 1)
 	f.damage = 0.0
 	FighterCombat.apply_hit(f, a_up, 1)
-	assert_eq(f.combo_hits, 3, "three hits in a row")
-	assert_true(f.hitstun < first, "the third has less hitstun")
+	assert_eq(f.hitstun, first, "the third still has the full hitstun")
+	f.damage = 0.0
+	FighterCombat.apply_hit(f, a_up, 1)
+	assert_eq(f.combo_hits, 4, "four hits in a row")
+	assert_true(f.hitstun < first, "the fourth has less hitstun")
 
 
 func test_the_same_attack_again_and_again_gets_weaker() -> void:

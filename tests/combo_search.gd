@@ -6,10 +6,11 @@
 extends RefCounted
 
 const MatchSim := preload("res://scripts/sim/match_sim.gd")
+const FighterCombat := preload("res://scripts/sim/fighter_combat.gd")
 const FighterInput := preload("res://scripts/sim/fighter_input.gd")
 const Mode = preload("res://scripts/sim/fighter_state.gd").Mode
 
-const BEAM := 6
+const BEAM := 8
 const MAX_DEPTH := 10
 const WAIT_LIMIT := 50  # Ticks a macro may wait for its hit.
 
@@ -54,12 +55,30 @@ func search() -> Dictionary:
 					best_damage = damage
 					best_path = path
 				next.append({"snap": sim.snapshot(), "hits": hits, "path": path,
-						"damage": damage})
+						"damage": damage, "advantage": _advantage()})
 		if next.is_empty():
 			break
+		if depth == 0:
+			beam = next  # Every first hit gets its chance.
+			continue
+		# Keep the states with the most time to act before the defender gets free (the best
+		# chances of another hit), and the ones with the most damage.
+		next.sort_custom(func(x, y): return x["advantage"] > y["advantage"])
+		beam = next.slice(0, BEAM)
 		next.sort_custom(func(x, y): return x["damage"] > y["damage"])
-		beam = next if depth == 0 else next.slice(0, BEAM)  # Every first hit gets its chance.
+		for entry in next.slice(0, BEAM / 2):
+			if not beam.has(entry):
+				beam.append(entry)
 	return {"hits": best_hits, "damage": best_damage, "path": best_path, "ko": ko}
+
+
+# Ticks the defender stays stunned beyond the attacker's own pause and recovery, right after a
+# hit.
+func _advantage() -> int:
+	var me = sim.fighters[a]
+	var them = sim.fighters[d]
+	var busy: int = me.hitlag + me.lag + FighterCombat.ticks_left(me)
+	return them.hitlag + them.hitstun - busy
 
 
 # Lets the attacker finish its attack and hit pause, so its next keys count. False when the
@@ -67,7 +86,8 @@ func search() -> Dictionary:
 func _wait_until_free(first: bool) -> bool:
 	for t in WAIT_LIMIT:
 		var me = sim.fighters[a]
-		var acts: bool = me.hitlag == 0 and me.attack == "" and me.lag == 0 				and (me.mode == Mode.GROUND or me.mode == Mode.AIR)
+		var settled: bool = me.mode == Mode.GROUND or me.mode == Mode.AIR
+		var acts: bool = settled and me.hitlag == 0 and me.attack == "" and me.lag == 0
 		if acts:
 			return true
 		sim.step(_inputs(FighterInput.new()))
@@ -160,19 +180,23 @@ func _macros(snap: Dictionary) -> Array:
 					keys.append([toward] if t < wait - 1 else [])
 				keys.append(airs[name])
 				list.append({"name": "hop %d %s" % [wait, name], "keys": keys})
-			for rise in [5, 9, 14]:
-				var full := [["jump"]]
-				for t in rise:
-					full.append(["jump", toward])
-				full.append(airs[name])
-				list.append({"name": "jump %d %s" % [rise, name], "keys": full})
+			for rise in [2, 3, 5, 9, 14]:
+				for drift in [toward, ""]:
+					var full := [["jump"]]
+					for t in rise:
+						full.append(["jump", drift] if drift != "" else ["jump"])
+					full.append(airs[name])
+					list.append({"name": "jump %d%s %s" % [rise, " " + drift if drift != "" else "",
+							name], "keys": full})
 	else:
 		for name in airs:
 			list.append({"name": name, "keys": [[toward], airs[name]]})
+			list.append({"name": "still " + name, "keys": [airs[name]]})
 			if me.jumps_left > 0:
-				var keys := [["jump", toward]]
-				for t in 6:
-					keys.append([toward])
-				keys.append(airs[name])
-				list.append({"name": "double jump " + name, "keys": keys})
+				for rise in [1, 3, 6]:
+					var keys := [["jump"]]
+					for t in rise:
+						keys.append([])
+					keys.append(airs[name])
+					list.append({"name": "double jump %d %s" % [rise, name], "keys": keys})
 	return list

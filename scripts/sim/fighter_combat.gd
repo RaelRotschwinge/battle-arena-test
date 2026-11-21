@@ -9,9 +9,18 @@ const PICK_TICKS := 2  # A direction pressed this many ticks after attack still 
 const UP_FRESH_TICKS := 6  # Up counts for an attack only this many ticks after it was pressed.
 const HITLAG_BASE := 3.0  # Hit pause in ticks: this plus HITLAG_PER_DAMAGE per point of damage.
 const HITLAG_PER_DAMAGE := 0.5
-const COMBO_GUARD_FROM := 3  # From the third hit in a row in hitstun, hitstun gets shorter.
+const COMBO_GUARD_FROM := 4  # From the fourth hit in a row in hitstun, hitstun gets shorter.
 const COMBO_GUARD_STEP := 0.15
 const COMBO_GUARD_MIN := 0.4
+# A weak hit (launch slower than this) stuns at least WEAK_STUN_BASE plus WEAK_STUN_PER_DAMAGE
+# ticks per point of damage, so light hits can start combos at low damage; launching hits are not
+# touched.
+const WEAK_LAUNCH := 12.0
+const WEAK_STUN_BASE := 12.0
+const WEAK_STUN_PER_DAMAGE := 1.5
+# A strong hit (launch at least this fast) holds both fighters this much longer in the hit pause.
+const STRONG_LAUNCH := 25.0
+const STRONG_HITLAG := 6
 
 
 # The data of an attack of the fighter, by default of its current attack.
@@ -21,6 +30,35 @@ static func data(f, name: String = "") -> Dictionary:
 
 static func has(f, name: String) -> bool:
 	return f.stats.attacks.has(name)
+
+
+# The data of the hit the current attack deals now. An attack with several hits ("multi": parts
+# that start "at" a tick of its active time) uses the values of the current part.
+static func hit_data(f) -> Dictionary:
+	var a := data(f)
+	if not a.has("multi"):
+		return a
+	var t: int = f.attack_ticks - a["startup"] - 1
+	var part := {}
+	for hit in a["multi"]:
+		if t >= hit["at"]:
+			part = hit
+	var merged := a.duplicate()
+	merged.merge(part, true)
+	return merged
+
+
+# True when the fighter's current attack shrugs off a hit of attack data a (armor): the hit deals
+# its damage but does not launch.
+static func armored(f, a: Dictionary) -> bool:
+	if f.attack == "" or a.get("grab", false):
+		return false
+	var own := data(f)
+	if not own.has("armor"):
+		return false
+	var window: Array = own["armor"]
+	var in_window: bool = f.attack_ticks >= window[0] and f.attack_ticks <= window[1]
+	return in_window and a["damage"] < own.get("armor_below", 0.0)
 
 
 # The ground attack for the held direction: up, down, side (the fighter turns to it) or neutral;
@@ -55,6 +93,7 @@ static func start(f, name: String, dir: int) -> void:
 	f.attack = name
 	f.attack_ticks = 0
 	f.hit_mask = 0
+	f.attack_hits = 0
 	f.attack_buffer = 0
 	f.lifting = false
 	_begin(f, name, dir)
@@ -100,6 +139,11 @@ static func advance(f) -> void:
 	if f.attack == "ground_pound":
 		return
 	var a := data(f)
+	if a.has("multi"):  # Each new hit of the attack may hit the same fighters again.
+		var t: int = f.attack_ticks - a["startup"] - 1
+		for hit in a["multi"]:
+			if hit["at"] > 0 and hit["at"] == t:
+				f.hit_mask = 0
 	if f.attack_ticks > a["startup"] + a["active"] + a["recovery"]:
 		f.attack = ""
 
@@ -171,9 +215,13 @@ static func apply_hit(target, a: Dictionary, side: int, damage_scale: float = 1.
 	if target.combo_hits >= COMBO_GUARD_FROM:
 		guard = maxf(1.0 - COMBO_GUARD_STEP * (target.combo_hits - COMBO_GUARD_FROM + 1),
 				COMBO_GUARD_MIN)
-	target.hitstun = roundi(speed * s.hitstun_factor * guard)
+	var stun: float = speed * s.hitstun_factor
+	if speed < WEAK_LAUNCH:
+		stun = maxf(stun, WEAK_STUN_BASE + WEAK_STUN_PER_DAMAGE * a["damage"] * damage_scale)
+	target.hitstun = roundi(stun * guard)
 	target.hitstun_total = target.hitstun
-	target.hitlag = maxi(target.hitlag, hitlag_ticks(a))
+	var pause: int = hitlag_ticks(a) + (STRONG_HITLAG if speed >= STRONG_LAUNCH else 0)
+	target.hitlag = maxi(target.hitlag, pause)
 	target.launch_pending = true
 	target.mode = Mode.HITSTUN
 	target.mode_ticks = 0

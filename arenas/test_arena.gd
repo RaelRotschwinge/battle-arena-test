@@ -1,9 +1,10 @@
 # The test arena of M1 (game design, "Arenas"): one solid main platform with open edges, ledges
-# and walls high enough for wall jumps, and two thin platforms above it.
+# and walls high enough for wall jumps, and two thin platforms above it. Kept for training.
 extends "res://scripts/sim/arena.gd"
 
 
 func _init() -> void:
+	arena_name = "Test arena"
 	solids.assign([Rect2(360, 800, 1200, 300)])
 	thin.assign([Rect2(560, 620, 300, 16), Rect2(1060, 620, 300, 16)])
 	ledges.assign([

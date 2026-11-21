@@ -25,14 +25,18 @@ deep enough to keep playing.
   the hit and with the attack's strength, and is lower for heavier fighters. Starting formula:
 
   ```
-  launch_speed = base_knockback + knockback_growth * (damage_after_hit / 100) * (100 / weight)
+  launch_speed = (base_knockback + knockback_growth * (damage_after_hit / 100) * (100 / weight))
+                 * knockback_scale
   ```
 
   `base_knockback`, `knockback_growth` and the launch angle belong to each attack; `weight` to each
-  fighter (100 is average). The launch speed is in pixels per tick.
+  fighter (100 is average); `knockback_scale` (starting value: 1.35) scales every launch. The
+  launch speed is in pixels per tick.
 - **Hitstun.** After a launch the target cannot act for a number of ticks that grows with the
-  launch speed (starting value: `launch_speed * 1.5` ticks). In hitstun the target falls with half
-  the gravity and the launch fades slowly, so strong hits carry it far. A target that hits the
+  launch speed (starting value: `launch_speed * 1.5` ticks); a weak hit (launch slower than 9)
+  stuns at least 12 ticks plus one per point of damage, so light hits can start combos at low
+  damage. In hitstun the target falls with 60 % of the gravity and the launch fades slowly, so
+  strong hits carry it far. A target that hits the
   ground fast in hitstun bounces off it once; slower, it lands and can act again.
 - **Blast zones.** A rectangle well outside the visible arena. A fighter whose body leaves it loses
   a life.
@@ -107,10 +111,10 @@ hit and is knocked off it.
 | Grab and throws | Attack while shielding grabs; the direction held throws (section "Defence") | M3 |
 | Special moves, strong attacks | No key for them for now (Open decisions 4) | open |
 
-The starting values of every attack (ticks, hitbox, damage, knockback and angle) are in
-`scripts/sim/attacks.gd`. Starting KO points of the side attack, against a fighter that steers
-back: about 100 % near the edge, about 155 % from the middle of the arena; the uppercut about
-125 %.
+The starting values of the test fighter's attacks (ticks, hitbox, damage, knockback and angle)
+are in `scripts/sim/attacks.gd`; each fighter in `fighters/` changes them. Hard computer players
+knock each other out at about 135 % on average, off the top, the sides and the bottom. The
+uppercut comes out at once and launches up; it is a combo starter more than a finisher.
 
 **Facing in the air.** A fighter keeps the way it faces in the air. Left or right toward it gives
 the forward air, against it the back air.
@@ -130,8 +134,11 @@ it lands. It hits every fighter it meets on the way down and launches it downwar
 the ground bounces up. Landing ends it with a short recovery (starting value: 6 ticks).
 
 **Hit feel:** a short hit pause on both fighters (starting value: 3 ticks plus half a tick per
-point of damage) in which the target shakes, a hit effect, light screen shake on strong hits and
-on a knockout. Keys pressed during the hit pause count right after it.
+point of damage, 6 ticks more for a hit that launches at 25 pixels per tick or faster) in which
+the target shakes, a hit effect, light screen shake and a trail behind the target on strong hits,
+a burst on a knockout, sparks on a blocked hit and a ring on a parry. Dust rises where fighters
+land, jump and turn. A damage of 100 % or more pulses in the HUD. Keys pressed during the hit
+pause count right after it.
 
 **Match end.** When only one fighter has lives left, the winner is shown, then the results
 screen with every player's knockouts, falls, self-knockouts and damage dealt, and the choices
@@ -171,15 +178,17 @@ A launched fighter is never helpless:
   tech: no bounce, the fighter gets up invulnerable, rolling with a direction held. Against a
   wall the fighter stops on it and can wall jump at once. A press opens no new tech window for
   half a second, so pressing all the time does not work. Without a tech a fast fighter bounces.
-- **Combo guard.** From the third hit in a row taken in hitstun, each hit gives 15 % less hitstun
-  (at least 40 %). Normal play does not feel it; it cuts endless combos.
+- **Combo guard.** From the fourth hit in a row taken in hitstun, each hit gives 15 % less
+  hitstun (at least 40 %). Normal play does not feel it; it cuts endless combos.
 - **Stale moves.** The same attack used again and again does less: each copy among the
   attacker's last 8 hits takes 7 % off its damage (at most 40 %) and a third of that off its
   knockback.
 
 The test `tests/test_combos.gd` searches the longest true combos (the target never got free in
 between) from several damages: against a defender that uses these ways out, no combo is longer
-than 4 hits or takes a life from below 80 %.
+than 4 hits or takes a life from below 80 %. At the start of M4 the search found true combos of
+3 hits at 0 to 40 % against a defender that does nothing (for example ground pound, ground pound,
+forward air) and 2 hits against one that gets out, for every fighter.
 
 ## Computer opponents
 
@@ -212,9 +221,36 @@ plays out the same way (`scripts/sim/cpu_player.gd`).
 
 ## Fighters
 
-- **M1 to M3:** one test fighter as a simple shape, used to tune movement and combat.
-- **M4:** three original fighters with different weights and styles, for example a light and fast
-  one, an average one and a heavy one. Their look, names and move sets are designed then.
+Three original fighters (M4), each with the full move set and one trait of its own. Every fighter
+is a file in `fighters/` that changes the test fighter's values and moves; `fighters/roster.gd`
+lists them. The plain test fighter stays for the tests.
+
+| | Kade | Pip | Brum |
+|---|---|---|---|
+| Idea | The all-rounder: no weakness, no trick | Light and quick, floaty | Heavy hitter, slow |
+| Look | Round head, green body, a scarf trailing behind | Round blue body, pointed beak, flapping wings | Wide red-brown body, square head, big gold fists |
+| Body | 60 x 100 | 50 x 84 | 74 x 116 |
+| Weight | 96 | 98 | 108 |
+| Run | 10 | 12.5 | 7.5 |
+| Jumps in the air | 1 | 2 | 1 |
+| Up-air lift | 13 px/tick, 11 ticks | 11 px/tick, 9 ticks | 10 px/tick, 9 ticks |
+| Trait | The strongest forward air, the longest lift | A neutral air that hits three times | Its side attack shrugs off hits under 12 % while it winds up (armor); grabs and strong hits break through |
+
+Starting balance (hard computer against hard computer, on the test arena and Ferry, 32 matches
+each fighter): Kade wins 22, Brum 14, Pip 11; average knockout at about 140 %. Computer players do
+not use Pip's speed and jumps, so humans will judge her.
+
+## Arenas
+
+| Arena | Layout | Feel |
+|---|---|---|
+| Pebble | A small island (700 wide), one thin platform | Short distances, early knockouts: whoever guards the edges wins |
+| Terraces | A wide stage (1520), three thin platforms on two levels | Long fights, play up and down |
+| Ferry | A medium island (1100), two thin platforms and a third that sails slowly from side to side (12 seconds there and back) and carries whoever stands on it | The moving deck changes the best spot all the time |
+| Test arena | The M1 arena | Training; random picks leave it out |
+
+No arena has hazards. Every arena has ledges at the top corners of its main platform and room for
+four fighters. The moving platform's place follows from the tick alone, so it replays the same.
 
 ## Arenas
 

@@ -145,8 +145,13 @@ func _in_hitstun(sim, me, input, stage: Rect2, p: Dictionary) -> void:
 	if me.hitlag > 0 and me.launch_pending:
 		if _di == Vector2.ZERO:
 			if _chance(sim, 4) < p["di"]:
+				# Across the launch: sideways toward the stage for a launch up, up and in for a
+				# launch to the side.
 				var inward := signf(stage.get_center().x - me.position.x)
-				_di = Vector2(inward, -1.0) if me.damage > 60.0 else Vector2(inward, 0.0)
+				if inward == 0.0:
+					inward = 1.0
+				var upward: bool = absf(me.velocity.y) > absf(me.velocity.x)
+				_di = Vector2(inward, 0.0) if upward else Vector2(inward, -1.0)
 			else:
 				_di = Vector2(0.0, 0.01)
 		input.left = _di.x < 0.0
@@ -312,7 +317,7 @@ func _pick_move(sim, me, t: Dictionary, p: Dictionary) -> String:
 		if t["mode"] == Mode.SHIELD and _chance(sim, 13) < p["grab"]:
 			moves = ["grab"]
 		elif t["damage"] >= p["ko"]:
-			moves = ["up", "side", "down", "jab"]
+			moves = ["side", "up", "down", "jab"]
 		else:
 			moves = ["jab", "down", "up", "side"]
 	else:

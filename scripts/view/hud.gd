@@ -82,6 +82,11 @@ func refresh() -> void:
 		damage.add_theme_color_override("font_color",
 				Color.WHITE.lerp(Color("ff3030"), clampf(f.damage / 150.0, 0.0, 1.0)))
 		damage.modulate.a = 0.35 if f.out else 1.0
+		if f.damage >= 100.0 and not f.out:  # In danger: the number pulses.
+			var pulse := 0.5 + 0.5 * sin(Engine.get_physics_frames() * 0.25)
+			damage.modulate = Color(1.0 + 0.6 * pulse, 1.0, 1.0)
+		elif not f.out:
+			damage.modulate = Color.WHITE
 		var stocks: HBoxContainer = _panels[i][1]
 		while stocks.get_child_count() > f.stocks:
 			var last := stocks.get_child(stocks.get_child_count() - 1)

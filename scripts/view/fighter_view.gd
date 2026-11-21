@@ -15,8 +15,11 @@ var fighter
 var color := Color.WHITE  # The player's color: label, outline and shield.
 var label := ""
 var show_boxes := false
+var effects  # The hit effects node: dust where the fighter lands, jumps and turns.
 var _respawns := 0
 var _ticks := 0
+var _last_mode := -1
+var _last_facing := 1
 
 
 # Called every tick after the simulation step.
@@ -27,7 +30,24 @@ func sync() -> void:
 		_respawns = fighter.respawns
 		reset_physics_interpolation()
 	_ticks += 1
+	_dust()
 	queue_redraw()
+
+
+func _dust() -> void:
+	var mode: int = fighter.mode
+	if effects != null and _last_mode != -1 and fighter.hitlag == 0:
+		var size: float = fighter.stats.width / 60.0
+		if mode == Mode.GROUND and _last_mode in [Mode.AIR, Mode.HITSTUN, Mode.DODGE]:
+			effects.add_dust(fighter.position, size)
+		elif mode == Mode.AIR and _last_mode == Mode.JUMP_SQUAT:
+			effects.add_dust(fighter.position, size * 0.7)
+		elif mode == Mode.GROUND and fighter.running and fighter.facing != _last_facing:
+			effects.add_dust(fighter.position, size * 0.6)
+		elif mode == Mode.TECH and _last_mode == Mode.HITSTUN:
+			effects.add_dust(fighter.position, size * 1.3)
+	_last_mode = mode
+	_last_facing = fighter.facing
 
 
 func _draw() -> void:

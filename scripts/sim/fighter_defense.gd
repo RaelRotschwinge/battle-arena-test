@@ -36,8 +36,8 @@ const TECH_IN_PLACE := {"total": 20, "invuln": 14, "distance": 0.0}
 const TECH_ROLL := {"total": 30, "invuln": 18, "distance": 120.0}
 const WALL_TECH_INVULN := 10
 const DI_DEGREES := 15.0  # The held direction bends a launch by at most this much.
-const DRIFT_ACCEL := 0.3  # Steering in hitstun, up to DRIFT_MAX pixels per tick.
-const DRIFT_MAX := 3.0
+const DRIFT_ACCEL := 0.1  # Steering in hitstun, up to DRIFT_MAX pixels per tick.
+const DRIFT_MAX := 2.0
 const HITSTUN_CANCEL := 0.8  # After this share of hitstun, a double jump or air dodge ends it.
 const STALE_QUEUE := 8  # The last attacks of a fighter that hit.
 const STALE_STEP := 0.07  # Damage lost per copy of the same attack in the queue,
@@ -239,9 +239,9 @@ static func break_shield(f) -> void:
 
 
 # Stale moves: the share of damage and knockback an attack keeps, from how often it is among the
-# attacker's last hits.
-static func stale_scales(attacker, name: String) -> Vector2:
-	var copies: int = attacker.stale.count(name)
+# attacker's last hits. own: copies that belong to the attack itself (its earlier hits).
+static func stale_scales(attacker, name: String, own: int = 0) -> Vector2:
+	var copies: int = maxi(attacker.stale.count(name) - own, 0)
 	var damage_scale := maxf(1.0 - STALE_STEP * copies, STALE_MIN)
 	return Vector2(damage_scale, 1.0 - (1.0 - damage_scale) / 3.0)
 

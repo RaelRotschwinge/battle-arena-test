@@ -124,7 +124,7 @@ func _resolve_hits() -> void:
 		var hitbox := FighterCombat.hitbox(attacker)
 		if not hitbox.has_area():
 			continue
-		var a := FighterCombat.data(attacker)
+		var a := FighterCombat.hit_data(attacker)
 		for j in fighters.size():
 			var target = fighters[j]
 			if j == i or not can_be_hit(target) or (attacker.hit_mask & (1 << j)) != 0:
@@ -133,7 +133,7 @@ func _resolve_hits() -> void:
 				continue
 			var hurtbox := FighterMotion.box(target, target.stats)
 			if hitbox.intersects(hurtbox):
-				hits.append({"attacker": i, "target": j, "attack": attacker.attack,
+				hits.append({"attacker": i, "target": j, "attack": attacker.attack, "data": a,
 						"side": FighterCombat.launch_side(attacker, target, a),
 						"position": hitbox.intersection(hurtbox).get_center()})
 	for hit in hits:
@@ -141,7 +141,7 @@ func _resolve_hits() -> void:
 		var j: int = hit["target"]
 		var attacker = fighters[i]
 		var target = fighters[j]
-		var a := FighterCombat.data(attacker, hit["attack"])
+		var a: Dictionary = hit["data"]
 		attacker.hit_mask |= 1 << j
 		var event := {"position": hit["position"], "attacker": i, "target": j}
 		if a.get("grab", false):
@@ -161,11 +161,23 @@ func _resolve_hits() -> void:
 			event["type"] = result
 			events.append(event)
 			continue
-		var scales := FighterDefense.stale_scales(attacker, hit["attack"])
-		FighterDefense.add_stale(attacker, hit["attack"])
+		# An attack counts once for stale moves, however many fighters or times it hits.
+		var own := 1 if attacker.attack_hits > 0 else 0
+		var scales := FighterDefense.stale_scales(attacker, hit["attack"], own)
+		if attacker.attack_hits == 0:
+			FighterDefense.add_stale(attacker, hit["attack"])
+		attacker.attack_hits += 1
 		attacker.hitlag = maxi(attacker.hitlag, FighterCombat.hitlag_ticks(a))
+		if FighterCombat.armored(target, a):  # Takes the damage, keeps attacking.
+			target.damage += a["damage"] * scales.x
+			attacker.damage_dealt += a["damage"] * scales.x
+			target.hitlag = maxi(target.hitlag, FighterCombat.hitlag_ticks(a))
+			event["type"] = "armor"
+			events.append(event)
+			continue
 		var before: float = target.damage
 		var speed := FighterCombat.apply_hit(target, a, hit["side"], scales.x, scales.y)
+		attacker.hitlag = maxi(attacker.hitlag, target.hitlag)  # Strong hits pause both longer.
 		attacker.damage_dealt += target.damage - before
 		target.last_hit_by = i
 		event["type"] = "hit"

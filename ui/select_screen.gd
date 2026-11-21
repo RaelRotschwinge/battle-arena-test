@@ -172,6 +172,7 @@ func _start() -> void:
 	var arena := _arena
 	if arena == "random":
 		var choices := ArenaList.ids()
+		choices.erase("test")  # The test arena is for training: chosen only on purpose.
 		var last: String = setup.get("arena", "")
 		if choices.size() > 1:
 			choices.erase(last)

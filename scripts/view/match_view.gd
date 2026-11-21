@@ -23,8 +23,8 @@ const Overlay := preload("res://ui/overlay.gd")
 const PLAYER_COLORS := [Color("e8553e"), Color("3e8fe8"), Color("e8c33e"), Color("4ec96a")]
 const RESULTS_DELAY_TICKS := 90  # The winner shows this long before the results screen.
 const SHAKE_SPEED := 18.0  # Hits launching at least this fast shake the camera.
-const DEFAULT_SETUP := {"players": [{"device": "kb1", "cpu": 0, "fighter": "test"},
-		{"device": "kb2", "cpu": 0, "fighter": "test"}], "arena": "test", "stocks": 3}
+const DEFAULT_SETUP := {"players": [{"device": "kb1", "cpu": 0, "fighter": "kade"},
+		{"device": "kb2", "cpu": 0, "fighter": "pip"}], "arena": "test", "stocks": 3}
 
 # players: one per fighter {"device": "kb1" (none for a computer), "cpu": 0 for a player or the
 # level 1 to 3, "fighter": a roster id}; arena: an arena id; stocks: lives. Set before the node
@@ -98,6 +98,7 @@ func _physics_process(_delta: float) -> void:
 		_show_event(event)
 	for view in _fighter_views:
 		view.sync()
+	_arena_view.sync()
 	_camera.follow()
 	_hud.refresh()
 	if sim.over:
@@ -139,6 +140,9 @@ func _show_event(event: Dictionary) -> void:
 			_camera.shake(10.0)
 		"grab":
 			_sounds.play("grab")
+		"armor":
+			_effects.add_block(event["position"], Color("e0b84a"))
+			_sounds.play("block")
 		"ko":
 			_effects.add_ko(event["position"], PLAYER_COLORS[event["fighter"]])
 			_sounds.play("ko")
@@ -268,6 +272,7 @@ func _start() -> void:
 		view.fighter = sim.fighters[i]
 		view.color = PLAYER_COLORS[i]
 		view.label = labels[i]
+		view.effects = _effects
 		view.show_boxes = _show_boxes
 		add_child(view)
 		view.sync()
