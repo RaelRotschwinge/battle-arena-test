@@ -44,14 +44,30 @@ deep enough to keep playing.
 | Move | Milestone | Notes |
 |---|---|---|
 | Walk and run | M1 | Run after a quick double tap or a full stick tilt |
-| Jump | M1 | Short hop on a quick tap, full jump on hold |
-| Double jump | M1 | One extra jump in the air, restored on landing |
+| Jump | M1 | Short hop on a quick tap, full jump on hold: letting go of up while rising cuts the jump |
+| Double jump | M1 | One extra jump in the air, restored on landing. It always adds its full height, also while the first jump still rises |
 | Air control | M1 | Steering in the air, slower than on the ground |
 | Fast fall | M1 | Pressing down at the top of a jump makes the fall faster |
 | Drop through | M1 | Down on a thin platform drops through it |
+| Ledge grab | M1 | A falling fighter next to a ledge hangs on it (see below) |
+| Wall jump | M1 | Pressing against a wall and up jumps off the wall (see below) |
 | Recovery move | M2 | Up and attack in the air: a move upwards to get back to the arena |
-| Ledge grab | M3 | Holding the edge of the main platform for a moment |
 | Shield and dodge | M3 | Blocks hits for a while; a dodge gives short invulnerability. Keys open (Open decisions, 4) |
+
+**Ledges.** The top corners of the main platform are ledges. A fighter falling past one close
+enough grabs it and hangs beside the wall, facing the arena; the double jump and the wall jumps
+come back. On the ledge, up jumps off it, toward the arena climbs up (starting value: 12 ticks),
+down or away lets go. Hanging longer than 5 seconds lets go by itself, and after letting go no
+ledge can be grabbed for half a second. A ledge holds one fighter at a time. A fighter rising
+past a ledge does not grab it.
+
+**Walls.** The sides of solid platforms are walls. Pressing against a wall in the air and pressing
+up jumps off it, up and away from the wall, without using the double jump. Up without pressing
+against the wall is the double jump. Three wall jumps per time in the air; landing or grabbing a
+ledge gives them back.
+
+The starting values of all movement numbers are in `scripts/sim/fighter_stats.gd`; the tuning
+panel (F2) changes them while playing.
 
 ## Combat
 
@@ -85,8 +101,9 @@ screen shake on strong hits.
 
 ## Arenas
 
-- **Test arena (M1):** one solid main platform with open edges, two thin platforms above it that
-  fighters can stand on and drop through, blast zones around it.
+- **Test arena (M1):** one solid main platform with open edges, ledges at both top corners and
+  walls high enough for wall jumps, two thin platforms above it that fighters can stand on and
+  drop through, blast zones around it.
 - **M4:** two to three original arenas with their own layout and look.
 
 ## Camera
@@ -116,6 +133,9 @@ attacks; up and attack is the recovery move, down and attack the ground pound (s
 Pressing attack during the take-off gives the up attack instead of the jump.
 
 Players join by pressing their attack key or button. Remapping keys comes later.
+
+**Testing aids:** F1 shows the fighters' state and the blast zone, F2 opens the tuning panel,
+F5 restarts the match.
 
 ## Game modes
 
@@ -163,7 +183,7 @@ docs/        this document, credits
 | **M0 Setup** | Godot project, folders, Git metadata, test runner, a first headless test | The empty project opens and the test passes |
 | **M1 Movement** | Test fighter, test arena, all M1 moves, 2 players, shared camera | Two players move around and the feel is tuned |
 | **M2 Combat** | Hitboxes, M2 attacks, damage, knockback, hitstun, blast zones, lives, respawn, win screen | A full 1-on-1 match can be played to the end |
-| **M3 Match flow** | Main menu, joining, fighter and arena select, 4 players, pause, rematch, ledge grab, shield and dodge | A full evening of local matches works without restarts |
+| **M3 Match flow** | Main menu, joining, fighter and arena select, 4 players, pause, rematch, shield and dodge | A full evening of local matches works without restarts |
 | **M4 Content and feel** | Three fighters, two to three arenas, effects, sounds, music | The game looks and sounds like itself |
 | **M5 Online** | Rollback netcode, lobby, play over the internet | Two players on different machines play a match |
 
