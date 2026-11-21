@@ -49,9 +49,9 @@ deep enough to keep playing.
 | Air control | M1 | Steering in the air, slower than on the ground |
 | Fast fall | M1 | Pressing down at the top of a jump makes the fall faster |
 | Drop through | M1 | Down on a thin platform drops through it |
-| Recovery move | M2 | An upward special move to get back to the arena |
+| Recovery move | M2 | Up and attack in the air: a move upwards to get back to the arena |
 | Ledge grab | M3 | Holding the edge of the main platform for a moment |
-| Shield and dodge | M3 | Blocks hits for a while; a dodge gives short invulnerability |
+| Shield and dodge | M3 | Blocks hits for a while; a dodge gives short invulnerability. Keys open (Open decisions, 4) |
 
 ## Combat
 
@@ -62,11 +62,17 @@ deals damage and knockback once per attack.
 | Attack | Milestone |
 |---|---|
 | Light attacks on the ground: neutral, side, up | M2 |
-| Air attacks: neutral, forward, up, down | M2 |
-| Recovery move (up special) | M2 |
-| Side and down special moves, back air | M4 |
+| Air attacks: neutral, forward, up | M2 |
+| Ground pound (down and attack in the air) | M2 |
+| Recovery move (up and attack in the air) | M2 |
+| Back air; special moves (keys open, Open decisions 4) | M4 |
 | Strong attacks (charged) | M4 |
 | Grab and throw | open |
+
+**Ground pound.** Down and attack in the air: the fighter stops in the air for a moment (starting
+value: 6 ticks), then drops straight down fast (starting value: twice the fast-fall speed) until
+it lands. It hits every fighter it meets on the way down. Landing ends it with a short recovery
+(starting value: 12 ticks).
 
 **Hit feel:** a short hit pause on both fighters (more for stronger hits), a hit effect, light
 screen shake on strong hits.
@@ -90,19 +96,26 @@ edges of the blast zones.
 
 ## Controls
 
-Starting layout; every key and button can be changed later.
+Two players share one keyboard with five keys each: player 1 uses W A S D and Space, player 2 the
+arrow keys and Enter. Players 3 and 4 use gamepads; a gamepad can also take a keyboard player's
+place. Every device has the same actions, so no player has more moves than another.
 
-| Action | Gamepad | Keyboard, player 1 | Keyboard, player 2 |
+| Action | Keyboard, player 1 | Keyboard, player 2 | Gamepad |
 |---|---|---|---|
-| Move | Left stick or D-pad | W A S D | Arrow keys |
-| Jump | A (bottom button) | Space | Numpad 0 |
-| Attack | X (left button) | J | Numpad 1 |
-| Special | B (right button) | K | Numpad 2 |
-| Shield (M3) | Shoulder button | L | Numpad 3 |
-| Pause | Start | Esc | Esc |
+| Move left and right | A, D | Left, Right | Left stick or D-pad |
+| Jump, double jump | W | Up | A (bottom button) |
+| Fast fall, drop through | S | Down | Stick or D-pad down |
+| Attack | Space | Enter (both Enter keys) | X (left button) |
+| Pause | Esc | Esc | Start |
 
-Players join by pressing a button on their device. Gamepads are the main input; two players on
-one keyboard is for quick tests.
+**The direction held picks the attack.** No direction gives the neutral attack, left or right the
+side attack, up the up attack, down the down attack. In the air the same keys give the air
+attacks; up and attack is the recovery move, down and attack the ground pound (section "Combat").
+
+**Up attack on the ground.** Up starts a jump after a short take-off (starting value: 3 ticks).
+Pressing attack during the take-off gives the up attack instead of the jump.
+
+Players join by pressing their attack key or button. Remapping keys comes later.
 
 ## Game modes
 
@@ -159,7 +172,8 @@ docs/        this document, credits
 1. **Art style:** pixel art, flat vector shapes or something else.
 2. **Fighters:** how many at first, their concepts and names.
 3. **Items:** none, or items that drop into the arena.
-4. **Defence:** how far shield, dodge, grab and throw go.
+4. **Defence and specials:** how far shield, dodge, grab, throw and special moves go, and how they
+   fit on five keys per player (for example key combinations).
 5. **Teams:** team mode, and whether teammates can hit each other.
 6. **Online:** peer-to-peer or a relay server; an existing Godot rollback addon or our own.
 7. **Platforms:** Windows first; web, Linux or a store release later.
