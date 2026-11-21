@@ -23,7 +23,8 @@ const TUNABLE := [
 	["wall_jump_push", 0.0, 30.0, 0.5],
 	["max_wall_jumps", 0, 10, 1],
 	["ledge_climb_ticks", 1, 60, 1],
-	["recovery_speed", 2.0, 40.0, 0.5],
+	["lift_speed", 2.0, 40.0, 0.5],
+	["landing_lag_ticks", 0, 20, 1],
 	["weight", 50.0, 200.0, 5.0],
 	["knockback_scale", 0.2, 3.0, 0.05],
 	["hitstun_factor", 0.0, 1.5, 0.05],
@@ -52,12 +53,12 @@ var max_wall_jumps := 3  # Per time in the air; landing or grabbing a ledge give
 var ledge_climb_ticks := 12
 var ledge_hang_ticks := 300  # Hanging longer than this lets go by itself.
 var ledge_regrab_ticks := 30  # After letting go, no ledge can be grabbed this long.
-var recovery_speed := 13.0  # Upward speed while the recovery move carries the fighter up.
+var lift_speed := 13.0  # Upward speed while the up air carries the fighter up.
 var weight := 100.0  # Heavier fighters fly less far (game design, "Core rules").
 var knockback_scale := 1.0  # Scales every launch.
 var hitstun_factor := 1.5  # Hitstun ticks per pixel per tick of launch speed.
 var hitstun_gravity := 0.5  # Share of gravity while in hitstun, so launched fighters fly far.
-var landing_lag_ticks := 6  # Landing during an air attack.
+var landing_lag_ticks := 2  # Landing during an air attack.
 var respawn_wait_ticks := 120  # The respawn platform holds the fighter at most this long.
 var respawn_invuln_ticks := 120
 var width := 60.0

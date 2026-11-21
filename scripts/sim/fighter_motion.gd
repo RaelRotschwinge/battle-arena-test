@@ -22,6 +22,9 @@ const WALL_REACH := 8.0  # A wall this close to the side of the box counts as to
 # of its speed; slower, it lands.
 const BOUNCE_SPEED := 8.0
 const BOUNCE_KEEP := 0.5
+# A press of attack or up that cannot act at once (during an attack, a landing lag, the take-off,
+# hitstun) waits this many ticks and acts as soon as it can.
+const BUFFER_TICKS := 8
 
 
 # blocked_ledges lists the ledges other fighters hold; they cannot be grabbed.
@@ -43,6 +46,7 @@ static func step(f, input, s, arena, blocked_ledges: Array = []) -> void:
 	elif input.left and not f.prev_input.left:
 		pressed_dir = -1
 	_update_running(f, pressed_dir, dir, s)
+	_update_buffers(f, pressed_up, pressed_attack)
 	if f.drop_ticks > 0:
 		f.drop_ticks -= 1
 	if f.ledge_cooldown > 0:
@@ -72,17 +76,20 @@ static func step(f, input, s, arena, blocked_ledges: Array = []) -> void:
 			return
 	elif f.mode == Mode.GROUND:
 		var free: bool = f.attack == "" and f.lag == 0
-		if free and pressed_attack:
-			FighterCombat.start(f, FighterCombat.ground_attack(input), dir)
-		elif free and pressed_up:
+		if free and f.attack_buffer > 0:
+			FighterCombat.start(f, FighterCombat.ground_attack(f, input), dir)
+		elif free and f.jump_buffer > 0:
+			f.jump_buffer = 0
 			_set_mode(f, Mode.JUMP_SQUAT)
 		elif free and pressed_down and _stands_on_thin(f, s, arena):
 			f.drop_ticks = s.drop_through_ticks
 			_set_mode(f, Mode.AIR)
+		elif pressed_up or pressed_down or pressed_dir != 0:
+			FighterCombat.repick(f, FighterCombat.ground_attack(f, input), dir)
 		_ground_control(f, dir, s, f.mode == Mode.GROUND and f.attack == "" and f.lag == 0)
 	elif f.mode == Mode.JUMP_SQUAT:
 		_ground_control(f, dir, s, false)
-		if pressed_attack:  # Attack during the take-off: the up attack instead of the jump.
+		if f.attack_buffer > 0:  # Up, then attack during the take-off: the uppercut at once.
 			_set_mode(f, Mode.GROUND)
 			FighterCombat.start(f, "up", dir)
 		elif f.mode_ticks >= s.jump_squat_ticks:
@@ -95,7 +102,7 @@ static func step(f, input, s, arena, blocked_ledges: Array = []) -> void:
 	elif f.mode == Mode.HITSTUN:
 		_hitstun_control(f, s)
 	else:
-		_air_control(f, input, dir, pressed_up, pressed_down, pressed_attack, s, arena)
+		_air_control(f, input, dir, pressed_up, pressed_down, pressed_dir, s, arena)
 
 	var falling_speed: float = f.velocity.y
 	var landed := _move_and_collide(f, s, arena)
@@ -131,6 +138,21 @@ static func _update_running(f, tap: int, dir: int, s) -> void:
 		f.running = false
 
 
+static func _update_buffers(f, pressed_up: bool, pressed_attack: bool) -> void:
+	if pressed_up:
+		f.ticks_since_up = 0
+		f.jump_buffer = BUFFER_TICKS
+	else:
+		if f.ticks_since_up < 1000:
+			f.ticks_since_up += 1
+		if f.jump_buffer > 0:
+			f.jump_buffer -= 1
+	if pressed_attack:
+		f.attack_buffer = BUFFER_TICKS
+	elif f.attack_buffer > 0:
+		f.attack_buffer -= 1
+
+
 static func _ground_control(f, dir: int, s, steer: bool) -> void:
 	if steer and dir != 0:
 		var speed: float = s.run_speed if f.running else s.walk_speed
@@ -141,11 +163,11 @@ static func _ground_control(f, dir: int, s, steer: bool) -> void:
 
 
 static func _air_control(f, input, dir: int, pressed_up: bool, pressed_down: bool,
-		pressed_attack: bool, s, arena) -> void:
-	if f.attack == "" and pressed_attack:
-		var name := FighterCombat.air_attack(f, input)
-		if name != "":
-			FighterCombat.start(f, name, dir)
+		pressed_dir: int, s, arena) -> void:
+	if f.attack == "" and f.attack_buffer > 0:
+		FighterCombat.start(f, FighterCombat.air_attack(f, input), dir)
+	elif pressed_up or pressed_down or pressed_dir != 0:
+		FighterCombat.repick(f, FighterCombat.air_attack(f, input), dir)
 	if f.attack == "ground_pound":
 		# A short stop in the air, then straight down fast until landing.
 		if FighterCombat.in_startup(f):
@@ -156,17 +178,20 @@ static func _air_control(f, input, dir: int, pressed_up: bool, pressed_down: boo
 
 	var wall := _touching_wall(f, s, arena)
 	var free: bool = f.attack == ""
-	if free and pressed_up and wall != 0 and dir == wall and f.wall_jumps_used < s.max_wall_jumps:
+	var want_jump: bool = free and f.jump_buffer > 0
+	if want_jump and wall != 0 and dir == wall and f.wall_jumps_used < s.max_wall_jumps:
 		# Pressing against a wall and up: a jump off the wall, away from it.
+		f.jump_buffer = 0
 		f.wall_jumps_used += 1
 		f.velocity = Vector2(-wall * s.wall_jump_push, -s.wall_jump_speed)
 		f.facing = -wall
 		f.fast_falling = false
 		f.jump_rising = false
-	elif free and pressed_up and f.jumps_left > 0:
+	elif want_jump and f.jumps_left > 0:
 		# The double jump always adds its full height. Rising speeds add up the way jump heights
 		# do (as squares), so a double jump while still rising is worth as much as one at the top.
 		var rising_speed := maxf(-f.velocity.y, 0.0)
+		f.jump_buffer = 0
 		f.jumps_left -= 1
 		f.velocity.y = -sqrt(rising_speed * rising_speed + s.double_jump_speed * s.double_jump_speed)
 		f.fast_falling = false
@@ -181,10 +206,8 @@ static func _air_control(f, input, dir: int, pressed_up: bool, pressed_down: boo
 			f.velocity.y *= s.jump_release_cut
 			f.jump_rising = false
 
-	var carried_up: bool = f.attack == "recovery" and FighterCombat.ticks_left(f) \
-			> FighterCombat.data("recovery")["recovery"]
-	if carried_up:  # The recovery move carries the fighter up until its hitbox ends.
-		f.velocity.y = -s.recovery_speed
+	if FighterCombat.lifts(f):  # Carried up, but never slower than the fighter already rises.
+		f.velocity.y = minf(f.velocity.y + s.gravity, -s.lift_speed)
 	else:
 		if pressed_down and not f.fast_falling and f.velocity.y > -FAST_FALL_APEX_TICKS * s.gravity:
 			f.fast_falling = true
@@ -219,6 +242,7 @@ static func _ledge_control(f, pressed_up: bool, pressed_down: bool, pressed_dir:
 	var side: int = arena.ledges[f.ledge]["side"]
 	if pressed_up:
 		_let_go(f, s)
+		f.jump_buffer = 0
 		f.velocity.y = -s.jump_speed
 		f.jump_rising = true
 	elif pressed_dir == -side:
@@ -267,8 +291,11 @@ static func _try_grab_ledge(f, s, arena, blocked_ledges: Array) -> void:
 		f.facing = -side
 		f.jumps_left = MAX_AIR_JUMPS
 		f.wall_jumps_used = 0
-		f.recovery_used = false
+		f.lift_used = false
+		f.lifting = false
 		f.attack = ""  # Grabbing a ledge ends an air attack.
+		f.attack_buffer = 0  # Presses from before the grab do not act on the ledge.
+		f.jump_buffer = 0
 		f.fast_falling = false
 		f.jump_rising = false
 		f.running = false
@@ -371,6 +398,7 @@ static func _land(f) -> void:
 	f.velocity.y = 0.0
 	f.jumps_left = MAX_AIR_JUMPS
 	f.wall_jumps_used = 0
-	f.recovery_used = false
+	f.lift_used = false
+	f.lifting = false
 	f.fast_falling = false
 	f.jump_rising = false

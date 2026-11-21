@@ -6,6 +6,8 @@ extends RefCounted
 const Attacks := preload("res://scripts/sim/attacks.gd")
 const Mode = preload("res://scripts/sim/fighter_state.gd").Mode
 
+const PICK_TICKS := 2  # A direction pressed this many ticks after attack still picks the attack.
+const UP_FRESH_TICKS := 6  # Up counts for an attack only this many ticks after it was pressed.
 const HITLAG_BASE := 3.0  # Hit pause in ticks: this plus HITLAG_PER_DAMAGE per point of damage.
 const HITLAG_PER_DAMAGE := 0.5
 
@@ -15,8 +17,9 @@ static func data(name: String) -> Dictionary:
 
 
 # The ground attack for the held direction: up, down, side (the fighter turns to it) or neutral.
-static func ground_attack(input) -> String:
-	if input.up:
+# Up counts only when pressed shortly before, so up still held from a jump does not count.
+static func ground_attack(f, input) -> String:
+	if input.up and f.ticks_since_up <= UP_FRESH_TICKS:
 		return "up"
 	if input.down:
 		return "down"
@@ -25,11 +28,10 @@ static func ground_attack(input) -> String:
 	return "jab"
 
 
-# The air attack for the held direction, "" when there is none: up is the recovery move, once
-# per time in the air.
+# The air attack for the held direction, the same way.
 static func air_attack(f, input) -> String:
-	if input.up:
-		return "" if f.recovery_used else "recovery"
+	if input.up and f.ticks_since_up <= UP_FRESH_TICKS:
+		return "up_air"
 	if input.down:
 		return "ground_pound"
 	if input.left != input.right:
@@ -41,12 +43,41 @@ static func start(f, name: String, dir: int) -> void:
 	f.attack = name
 	f.attack_ticks = 0
 	f.hit_mask = 0
-	if dir != 0 and (name == "side" or name == "fair" or name == "recovery"):
+	f.attack_buffer = 0
+	f.lifting = false
+	_begin(f, name, dir)
+
+
+# In the first ticks of an attack a newly pressed direction still changes it, so attack and
+# direction need not be pressed in the same tick.
+static func repick(f, name: String, dir: int) -> void:
+	if f.attack == "" or f.attack_ticks > PICK_TICKS or name == f.attack:
+		return
+	if f.lifting:  # The lift was not used after all.
+		f.lifting = false
+		f.lift_used = false
+	f.attack = name
+	_begin(f, name, dir)
+
+
+static func _begin(f, name: String, dir: int) -> void:
+	if dir != 0 and (name == "side" or name == "fair" or name == "up_air"):
 		f.facing = dir
-	if name == "recovery":
-		f.recovery_used = true
-	f.fast_falling = false
-	f.jump_rising = false
+	if name == "up" or name == "up_air":
+		f.jump_buffer = 0  # The up press belongs to the attack, not to a jump.
+	if name == "up_air" and not f.lift_used:
+		f.lifting = true
+		f.lift_used = true
+		f.fast_falling = false
+		f.jump_rising = false
+
+
+# The up air carries the fighter up while its hitbox is out.
+static func lifts(f) -> bool:
+	if not f.lifting or f.attack != "up_air":
+		return false
+	var a := data("up_air")
+	return f.attack_ticks <= a["startup"] + a["active"]
 
 
 # Counts the ticks of the current attack and ends it after its recovery. The ground pound ends
@@ -126,5 +157,6 @@ static func apply_hit(target, name: String, side: int, s) -> float:
 	target.running = false
 	target.fast_falling = false
 	target.jump_rising = false
-	target.recovery_used = false  # A hit gives the recovery move back.
+	target.lifting = false
+	target.lift_used = false  # A hit gives the lift of the up air back.
 	return speed

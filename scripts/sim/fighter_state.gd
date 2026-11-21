@@ -8,9 +8,10 @@ enum Mode { GROUND, JUMP_SQUAT, AIR, LEDGE, CLIMB, HITSTUN, RESPAWN }
 
 const _FIELDS := [
 	"position", "velocity", "mode", "mode_ticks", "facing", "running", "jumps_left",
-	"wall_jumps_used", "recovery_used", "fast_falling", "jump_rising", "drop_ticks", "ledge",
-	"ledge_cooldown", "tap_dir", "ticks_since_tap", "respawns", "damage", "stocks", "out",
-	"attack", "attack_ticks", "hit_mask", "hitstun", "hitlag", "invuln", "lag",
+	"wall_jumps_used", "lift_used", "lifting", "fast_falling", "jump_rising", "drop_ticks",
+	"ledge", "ledge_cooldown", "tap_dir", "ticks_since_tap", "ticks_since_up", "attack_buffer",
+	"jump_buffer", "respawns", "damage", "stocks", "out", "attack", "attack_ticks", "hit_mask",
+	"hitstun", "hitlag", "invuln", "lag",
 ]
 
 var position := Vector2.ZERO  # Feet, horizontal middle. Pixels, y points down.
@@ -29,7 +30,11 @@ var ledge_cooldown := 0  # Ticks left after letting go of a ledge before one can
 var tap_dir := 0  # Direction of the last left or right tap, for the double tap to run.
 var ticks_since_tap := 1000
 var respawns := 0  # Counts respawns, so the view knows when the fighter jumped to a new place.
-var recovery_used := false  # The recovery move was used in this time in the air.
+var lift_used := false  # The up air carried the fighter up in this time in the air.
+var lifting := false  # The current up air carries the fighter up.
+var ticks_since_up := 1000  # Ticks since up was last pressed.
+var attack_buffer := 0  # Ticks left in which a press of attack waits until the fighter can act.
+var jump_buffer := 0  # The same for a press of up that asks for a jump.
 var damage := 0.0  # Percent.
 var stocks := 0  # Lives left.
 var out := false  # No lives left: out of the match.

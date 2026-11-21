@@ -48,7 +48,7 @@ func a_in_air(at: Vector2) -> void:
 func test_jab_hits_after_its_startup_and_only_once() -> void:
 	hold(["attack"])
 	assert_eq(a().attack, "jab", "no direction gives the jab")
-	hold(["attack"], [], 3)
+	hold(["attack"], [], FighterCombat.data("jab")["startup"])
 	assert_eq(b().damage, 0.0, "no hit during the startup")
 	hold(["attack"])
 	assert_eq(b().damage, 3.0, "hit on the first active tick")
@@ -58,7 +58,7 @@ func test_jab_hits_after_its_startup_and_only_once() -> void:
 
 
 func test_hit_pause_freezes_both_fighters() -> void:
-	hold(["attack"], [], 5)
+	hold(["attack"], [], FighterCombat.data("jab")["startup"] + 2)
 	var pause := FighterCombat.hitlag_ticks(FighterCombat.data("jab"))
 	assert_eq(a().hitlag, pause, "attacker paused")
 	assert_eq(b().hitlag, pause, "target paused")
@@ -77,11 +77,93 @@ func test_the_held_direction_picks_the_ground_attack() -> void:
 	assert_eq(a().attack, "side", "left: the side attack")
 	assert_eq(a().facing, -1, "turned to the side")
 	hold([], [], 40)
+	hold(["up", "attack"])
+	assert_eq(a().attack, "up", "up and attack together: the up attack")
+	hold([], [], 30)
+	assert_eq(a().mode, Mode.GROUND, "no jump after it")
+
+
+func test_a_direction_pressed_just_after_attack_still_picks_the_attack() -> void:
+	b().position = Vector2(1400.0, 800.0)
+	hold(["attack"])
+	hold(["down", "attack"])
+	assert_eq(a().attack, "down", "on the ground")
+	hold([], [], 30)
+	hold(["attack"])
+	hold(["up", "attack"])
+	assert_eq(a().attack, "up", "up just after attack: the up attack")
+	hold([], [], 30)
+	assert_eq(a().mode, Mode.GROUND, "and no jump")
+	a_in_air(Vector2(960.0, 300.0))
+	hold(["attack"])
+	hold(["left", "attack"])
+	assert_eq(a().attack, "fair", "in the air")
+	assert_eq(a().facing, -1, "turned")
+
+
+func test_attack_during_the_take_off_gives_the_uppercut_on_the_ground() -> void:
+	b().position = Vector2(1400.0, 800.0)
 	hold(["up"])
 	assert_eq(a().mode, Mode.JUMP_SQUAT, "up starts the take-off")
 	hold(["up", "attack"])
-	assert_eq(a().attack, "up", "attack during the take-off: the up attack")
+	assert_eq(a().attack, "up", "the uppercut")
 	assert_eq(a().mode, Mode.GROUND, "instead of the jump")
+	hold(["up"], [], 30)
+	assert_eq(a().mode, Mode.GROUND, "no jump after it")
+
+
+# Fighter b stands in fighter a; up and attack in any order must hit b at once, before a moves.
+func test_the_uppercut_hits_a_fighter_standing_in_the_attacker() -> void:
+	var orders := {
+		"together": [["up", "attack"]],
+		"up first": [["up"], ["up", "attack"]],
+		"up two ticks first": [["up"], ["up"], ["up", "attack"]],
+		"attack first": [["attack"], ["up", "attack"]],
+	}
+	for order in orders:
+		for b_x in [960.0, 975.0, 945.0]:
+			sim = MatchSim.new(TestArena.new(), 2)
+			place(Vector2(960.0, 800.0), Vector2(b_x, 800.0))
+			var presses: Array = orders[order]
+			var hit_tick := -1
+			for t in 12:
+				hold(presses[mini(t, presses.size() - 1)])
+				if b().damage > 0.0:
+					hit_tick = t
+					break
+			var where := "%s, b at x %.0f" % [order, b_x]
+			assert_true(hit_tick >= 0 and hit_tick <= presses.size() + 4,
+					"%s: hit on tick %d" % [where, hit_tick])
+			assert_eq(a().position, Vector2(960.0, 800.0), "%s: a has not moved" % where)
+
+
+func test_an_attack_pressed_during_an_attack_comes_right_after_it() -> void:
+	b().position = Vector2(1400.0, 800.0)
+	hold(["attack"])
+	var a_jab := FighterCombat.data("jab")
+	var total: int = a_jab["startup"] + a_jab["active"] + a_jab["recovery"]
+	hold([], [], total - 5)
+	hold(["attack"])
+	hold([], [], 4)
+	assert_eq(a().attack_ticks, total, "the first jab still runs")
+	hold()
+	assert_eq(a().attack, "jab", "the second jab")
+	assert_eq(a().attack_ticks, 0, "starts at once")
+
+
+func test_a_jump_pressed_near_the_end_of_an_air_attack_comes_right_after_it() -> void:
+	b().position = Vector2(1400.0, 800.0)
+	a_in_air(Vector2(960.0, 200.0))
+	hold(["attack"])
+	hold([], [], 4)
+	hold(["up"])
+	assert_eq(a().jumps_left, 1, "no jump during the attack")
+	var nair := FighterCombat.data("nair")
+	var total: int = nair["startup"] + nair["active"] + nair["recovery"]
+	hold([], [], total - 12)
+	hold(["up"])
+	hold([], [], 7)
+	assert_eq(a().jumps_left, 0, "the double jump right after the attack")
 
 
 func test_more_damage_launches_farther() -> void:
@@ -91,7 +173,7 @@ func test_more_damage_launches_farther() -> void:
 
 
 func test_two_fighters_hitting_each_other_both_get_hit() -> void:
-	hold(["attack"], ["attack"], 5)
+	hold(["attack"], ["attack"], FighterCombat.data("jab")["startup"] + 2)
 	assert_eq(a().damage, 3.0, "a hit")
 	assert_eq(b().damage, 3.0, "b hit")
 
@@ -108,25 +190,31 @@ func test_air_attacks() -> void:
 	assert_eq(a().facing, -1, "turned to that side")
 
 
-func test_air_attack_allows_no_jump() -> void:
+func test_up_held_on_from_a_jump_does_not_make_every_air_attack_the_up_air() -> void:
 	b().position = Vector2(1400.0, 800.0)
-	a_in_air(Vector2(960.0, 300.0))
-	hold(["attack"])
-	hold(["up"])
-	assert_eq(a().jumps_left, 1, "no double jump during the attack")
+	a().position.x = 960.0
+	hold(["up"], [], 15)
+	assert_eq(a().mode, Mode.AIR, "jumped")
+	hold(["up", "attack"])
+	assert_eq(a().attack, "nair", "the neutral air")
+	hold(["up"], [], 18)
+	hold(["up", "right", "attack"])
+	assert_eq(a().attack, "fair", "with a side: the forward air")
 
 
 func test_landing_during_an_air_attack_gives_landing_lag() -> void:
 	b().position = Vector2(1400.0, 800.0)
 	a_in_air(Vector2(960.0, 790.0))
 	a().velocity.y = 5.0
-	hold(["attack"], [], 3)
+	hold(["attack"])
+	hold()
 	assert_eq(a().mode, Mode.GROUND, "landed")
 	assert_eq(a().attack, "", "the attack ended")
-	assert_true(a().lag > 0, "landing lag")
-	hold([])
+	assert_eq(a().lag, sim.stats.landing_lag_ticks, "landing lag")
 	hold(["attack"])
 	assert_eq(a().attack, "", "no attack during the landing lag")
+	hold(["attack"], [], sim.stats.landing_lag_ticks - 1)
+	assert_eq(a().attack, "jab", "the attack pressed in the lag comes right after it")
 
 
 func test_ground_pound_stops_then_drops_fast_and_lands_with_lag() -> void:
@@ -157,20 +245,30 @@ func test_ground_pound_bounces_a_fighter_on_the_ground() -> void:
 	assert_true(top < 790.0, "bounced up to %.0f" % top)
 
 
-func test_recovery_move_carries_up_once_per_air_time() -> void:
+func test_up_air_hits_every_time_and_carries_up_once_per_air_time() -> void:
 	b().position = Vector2(1400.0, 800.0)
 	a_in_air(Vector2(960.0, 500.0))
 	hold(["up", "attack"])
-	assert_eq(a().attack, "recovery", "up in the air: the recovery move")
-	assert_eq(a().velocity.y, -sim.stats.recovery_speed, "carried up")
+	assert_eq(a().attack, "up_air", "up and attack in the air: the up air")
+	assert_eq(a().velocity.y, -sim.stats.lift_speed, "carried up")
 	assert_eq(a().jumps_left, 1, "the double jump is kept")
 	hold([], [], 30)
 	assert_eq(a().attack, "", "over")
 	hold(["up", "attack"])
-	assert_true(a().attack != "recovery", "not twice in one time in the air")
+	assert_eq(a().attack, "up_air", "the up air again")
+	assert_true(not a().lifting, "without the lift")
+	assert_eq(a().jumps_left, 1, "and without a jump")
 	hold([], [], 240)
 	assert_eq(a().mode, Mode.GROUND, "landed")
-	assert_eq(a().recovery_used, false, "landing gives it back")
+	assert_eq(a().lift_used, false, "landing gives the lift back")
+
+
+func test_the_low_kick_hits_fighters_standing_in_each_other() -> void:
+	place(Vector2(960.0, 800.0), Vector2(965.0, 800.0))
+	a().facing = -1
+	hold(["down", "attack"], [], FighterCombat.data("down")["startup"] + 2)
+	assert_eq(b().damage, 6.0, "hit behind")
+	assert_true(b().velocity.x > 0.0, "launched away")
 
 
 func test_a_hit_knocks_a_fighter_off_the_ledge() -> void:
@@ -281,11 +379,11 @@ func _input(keys: Array) -> FighterInput:
 func _fight(t: int, forward: int) -> FighterInput:
 	var input := FighterInput.new()
 	var phase := t % 90
-	var ahead := phase < 35
-	var back := phase >= 45 and phase < 55
+	var ahead := phase < 45
+	var back := phase >= 60 and phase < 68
 	input.right = ahead if forward > 0 else back
 	input.left = back if forward > 0 else ahead
 	input.up = t % 41 < 2 or t % 67 == 5
 	input.down = t % 53 == 30
-	input.attack = t % 13 < 2
+	input.attack = t % 30 < 2
 	return input

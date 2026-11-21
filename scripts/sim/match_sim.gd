@@ -141,7 +141,11 @@ func _respawn(f) -> void:
 	f.mode_ticks = 0
 	f.jumps_left = FighterMotion.MAX_AIR_JUMPS
 	f.wall_jumps_used = 0
-	f.recovery_used = false
+	f.lift_used = false
+	f.lifting = false
+	f.ticks_since_up = 1000
+	f.attack_buffer = 0
+	f.jump_buffer = 0
 	f.fast_falling = false
 	f.jump_rising = false
 	f.running = false

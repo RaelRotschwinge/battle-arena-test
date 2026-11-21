@@ -55,7 +55,7 @@ deep enough to keep playing.
 | Drop through | M1 | Down on a thin platform drops through it |
 | Ledge grab | M1 | A falling fighter next to a ledge hangs on it (see below) |
 | Wall jump | M1 | Pressing against a wall and up jumps off the wall (see below) |
-| Recovery move | M2 | Up and attack in the air: an upward attack that carries the fighter up, once per time in the air (section "Combat") |
+| Recovery move | M2 | The up air: up and attack in the air carries the fighter up, once per time in the air (section "Combat") |
 | Shield and dodge | M3 | Blocks hits for a while; a dodge gives short invulnerability. Keys open (Open decisions, 4) |
 
 **Ledges.** The top corners of the main platform are ledges. A fighter falling past one close
@@ -85,11 +85,11 @@ hit and is knocked off it.
 |---|---|---|
 | Jab | Attack on the ground, no direction | M2 |
 | Side attack | Left or right and attack on the ground; the fighter turns to that side | M2 |
-| Up attack | Up and attack on the ground, or attack during the take-off of a jump | M2 |
-| Low kick | Down and attack on the ground: quick, flat and forward, pushes the opponent away low | M2 |
+| Uppercut | Up and attack on the ground, in either order, also attack during the take-off of a jump. It comes out at once and reaches from the chest to above the head, so it also hits a fighter standing in the attacker | M2 |
+| Low kick | Down and attack on the ground: a quick, flat sweep to both sides at once, pushes the opponent away low; fighters standing in each other can hit each other with it | M2 |
 | Neutral air | Attack in the air, no direction: hits all around, launches away from the attacker | M2 |
 | Forward air | Left or right and attack in the air; the fighter turns to that side | M2 |
-| Recovery move | Up and attack in the air (see below) | M2 |
+| Up air | Up and attack in the air: hits upward, the first one in a time in the air carries the fighter up (see below) | M2 |
 | Ground pound | Down and attack in the air (see below) | M2 |
 | Back air; special moves (keys open, Open decisions 4) | | M4 |
 | Strong attacks (charged) | | M4 |
@@ -97,21 +97,22 @@ hit and is knocked off it.
 
 The starting values of every attack (ticks, hitbox, damage, knockback and angle) are in
 `scripts/sim/attacks.gd`. Starting KO points of the side attack, against a fighter that steers
-back: about 100 % near the edge, about 155 % from the middle of the arena; the up attack about
+back: about 100 % near the edge, about 155 % from the middle of the arena; the uppercut about
 125 %.
 
 **Air attacks** allow steering and fast fall, but no jumps while they last. Landing during one ends
-it with a short landing lag (starting value: 6 ticks). Grabbing a ledge ends it too.
+it with a short landing lag (starting value: 2 ticks). Grabbing a ledge ends it too.
 
-**Recovery move.** Up and attack in the air: an upward attack that carries the fighter up while its
-hitbox is out (starting value: 13 pixels per tick for 12 ticks), with steering. There is no other
-up attack in the air. It works once per time in the air; landing, grabbing a ledge or being hit
-gives it back. The double jump stays available.
+**Up air and recovery.** Up and attack in the air is an upward hit and can be used as often as any
+other air attack. The first one in a time in the air also carries the fighter up while its hitbox
+is out (starting value: 13 pixels per tick for 11 ticks, never slower than the fighter already
+rises), with steering; this lift is the recovery move. Landing, grabbing a ledge or being hit
+gives the lift back. The double jump stays available.
 
 **Ground pound.** Down and attack in the air: the fighter stops in the air for a moment (starting
-value: 6 ticks), then drops straight down fast (starting value: twice the fast-fall speed) until
+value: 4 ticks), then drops straight down fast (starting value: twice the fast-fall speed) until
 it lands. It hits every fighter it meets on the way down and launches it downward; a fighter on
-the ground bounces up. Landing ends it with a short recovery (starting value: 12 ticks).
+the ground bounces up. Landing ends it with a short recovery (starting value: 6 ticks).
 
 **Hit feel:** a short hit pause on both fighters (starting value: 3 ticks plus half a tick per
 point of damage) in which the target shakes, a hit effect, light screen shake on strong hits and
@@ -153,13 +154,22 @@ place. Every device has the same actions, so no player has more moves than anoth
 | Pause | Esc | Esc | Start |
 
 **The direction held picks the attack.** On the ground, no direction gives the jab, left or right
-the side attack, up the up attack, down the low kick. In the air, no direction gives the neutral
-air, left or right the forward air, up the recovery move, down the ground pound (section
-"Combat"). Attack and a direction pressed in the same tick give the attack, not the jump or the
-drop through.
+the side attack, up the uppercut, down the low kick. In the air, no direction gives the neutral
+air, left or right the forward air, up the up air, down the ground pound (section "Combat").
 
-**Up attack on the ground.** Up starts a jump after a short take-off (starting value: 3 ticks).
-Pressing attack during the take-off gives the up attack instead of the jump.
+**No exact timing needed.** The controls forgive presses that come a little early or late:
+
+- **Buffer.** A press of attack or up that cannot act at once (during an attack, a landing lag,
+  the take-off of a jump or hitstun) waits up to 8 ticks and acts as soon as it can. Attacks and
+  jumps chain without waiting for the right tick.
+- **Direction after attack.** A direction pressed up to 2 ticks after attack still picks the
+  attack, so attack and direction need not be pressed in the same tick.
+- **Up held from a jump does not count.** Up is also the jump key, so up counts for an attack only
+  when it was pressed shortly before (starting value: 6 ticks). Holding up for a full jump and
+  pressing attack gives the neutral or forward air, not the up air.
+- **Attack and up together.** Attack and up pressed in the same tick give the uppercut (on the
+  ground) or the up air, not a jump. Attack pressed during the take-off of a jump (starting value:
+  3 ticks) gives the uppercut at once instead of the jump.
 
 Players join by pressing their attack key or button. Remapping keys comes later.
 
