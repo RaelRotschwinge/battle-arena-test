@@ -1,32 +1,35 @@
-# The join and select screen (game design, "Menus"): every device joins with its attack key or
-# button and picks a fighter with left and right; attack again is ready. A ready player changes the
-# match settings below (arena, lives, computer opponents) with the directions, and attack starts
-# the match. The shield key or B steps back.
+# The fighter select screen (game design, "Menus"): every device joins with its attack key or
+# button and picks a fighter with left and right (or Random); attack again is ready. Each panel
+# shows the fighter, its stat sheet and its special with the player's own key. Ready players
+# change the match rules at the bottom (lives, computer players, their level, hazards) with the
+# directions, and attack goes on to the arena select. The shield key or B steps back.
 extends Control
 
 const Devices := preload("res://scripts/view/devices.gd")
 const Roster := preload("res://fighters/roster.gd")
-const ArenaList := preload("res://arenas/arena_list.gd")
 const CpuPlayer := preload("res://scripts/sim/cpu_player.gd")
 const Overlay := preload("res://ui/overlay.gd")
+const FighterCard := preload("res://ui/fighter_card.gd")
 
 const SLOTS := 4
 const COLORS := [Color("e8553e"), Color("3e8fe8"), Color("e8c33e"), Color("4ec96a")]
 const STOCK_CHOICES := [1, 2, 3, 4, 5]
-const ROWS := ["arena", "stocks", "cpus", "cpu_level"]
+const ROWS := ["stocks", "cpus", "cpu_level", "hazards"]
+const ROW_NAMES := ["Lives", "Computer players", "Level", "Hazards"]
 
 var app
-# The setup kept from the last time: {"players": [...], "arena", "stocks", "cpus", "cpu_level"}.
+# The setup kept from the last time: {"players", "arena", "arena_choice", "stocks", "cpus",
+# "cpu_level", "hazards"}.
 var setup := {}
 
 var _slots := []  # Per slot: {} empty, or {"device", "fighter", "ready"}.
 var _row := 0
-var _arena := "random"
 var _stocks := 3
 var _cpus := 0
 var _cpu_level := 2
-var _cards := []  # Per slot: [panel, title, fighter, hint].
-var _settings: Label
+var _hazards := true
+var _cards := []
+var _rules: Label
 var _hint: Label
 
 
@@ -36,37 +39,25 @@ func _ready() -> void:
 	background.color = Color("161a24")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(background)
-	var title := Overlay.label(72)
+	var title := Overlay.label(64)
 	title.text = "Choose your fighters"
-	title.position = Vector2(0, 60)
-	title.size = Vector2(1920, 100)
+	title.position = Vector2(0, 22)
+	title.size = Vector2(1920, 90)
 	add_child(title)
 	for i in SLOTS:
-		var panel := Panel.new()
-		panel.position = Vector2(150 + i * 420, 210)
-		panel.size = Vector2(380, 420)
-		add_child(panel)
-		var name_label := Overlay.label(40)
-		name_label.position = Vector2(0, 24)
-		name_label.size = Vector2(380, 60)
-		panel.add_child(name_label)
-		var fighter := Overlay.label(52)
-		fighter.position = Vector2(0, 150)
-		fighter.size = Vector2(380, 80)
-		panel.add_child(fighter)
-		var hint := Overlay.label(24)
-		hint.position = Vector2(10, 280)
-		hint.size = Vector2(360, 120)
-		hint.autowrap_mode = TextServer.AUTOWRAP_WORD
-		panel.add_child(hint)
-		_cards.append([panel, name_label, fighter, hint])
-	_settings = Overlay.label(36)
-	_settings.position = Vector2(0, 680)
-	_settings.size = Vector2(1920, 230)
-	add_child(_settings)
-	_hint = Overlay.label(26)
-	_hint.position = Vector2(0, 940)
-	_hint.size = Vector2(1920, 100)
+		var card := FighterCard.new()
+		card.color = COLORS[i]
+		card.position = Vector2(40 + i * 470, 120)
+		add_child(card)
+		_cards.append(card)
+	_rules = Overlay.label(32)
+	_rules.position = Vector2(0, 952)
+	_rules.size = Vector2(1920, 50)
+	add_child(_rules)
+	_hint = Overlay.label(24)
+	_hint.add_theme_color_override("font_color", Color("b0b4c0"))
+	_hint.position = Vector2(0, 1012)
+	_hint.size = Vector2(1920, 44)
 	add_child(_hint)
 	_load_setup()
 	_refresh()
@@ -77,10 +68,10 @@ func _load_setup() -> void:
 	_slots = []
 	for i in SLOTS:
 		_slots.append({})
-	_arena = setup.get("arena_choice", "random")
 	_stocks = setup.get("stocks", 3)
 	_cpus = setup.get("cpus", 0)
 	_cpu_level = setup.get("cpu_level", 2)
+	_hazards = setup.get("hazards", true)
 	var i := 0
 	for player in setup.get("players", []):
 		if player.get("cpu", 0) == 0 and Devices.has_device(player["device"]) and i < SLOTS:
@@ -90,6 +81,7 @@ func _load_setup() -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	var picks: Array = Roster.ids() + ["random"]
 	for device in Devices.all():
 		var slot := _slot_of(device)
 		if slot < 0:
@@ -102,9 +94,9 @@ func _physics_process(_delta: float) -> void:
 		var player: Dictionary = _slots[slot]
 		if not player["ready"]:
 			if Devices.pressed(device, "left"):
-				player["fighter"] = _cycle(Roster.ids(), player["fighter"], -1)
+				player["fighter"] = _cycle(picks, player["fighter"], -1)
 			elif Devices.pressed(device, "right"):
-				player["fighter"] = _cycle(Roster.ids(), player["fighter"], 1)
+				player["fighter"] = _cycle(picks, player["fighter"], 1)
 			elif Devices.pressed(device, "confirm"):
 				player["ready"] = true
 			elif Devices.pressed(device, "back"):
@@ -141,14 +133,14 @@ func _join(device: String) -> void:
 
 func _change(step: int) -> void:
 	match ROWS[_row]:
-		"arena":
-			_arena = _cycle(["random"] + ArenaList.ids(), _arena, step)
 		"stocks":
 			_stocks = STOCK_CHOICES[posmod(STOCK_CHOICES.find(_stocks) + step, STOCK_CHOICES.size())]
 		"cpus":
 			_cpus = clampi(_cpus + step, 0, SLOTS - _humans())
 		"cpu_level":
 			_cpu_level = clampi(_cpu_level + step, 1, 3)
+		"hazards":
+			_hazards = not _hazards
 
 
 func _can_start() -> bool:
@@ -165,65 +157,67 @@ func _start() -> void:
 	for slot in _slots:
 		if not slot.is_empty():
 			players.append({"device": slot["device"], "cpu": 0, "fighter": slot["fighter"]})
-	var ids := Roster.ids()
+	for fighter in _cpu_fighters():
+		players.append({"device": "", "cpu": _cpu_level, "fighter": fighter})
+	var next := setup.duplicate(true)
+	next.merge({"players": players, "stocks": _stocks, "cpus": _cpus, "cpu_level": _cpu_level,
+			"hazards": _hazards}, true)
+	app.show_arena_select(next)
+
+
+# The fighters of the computer players: in roster order, first the ones no player picked.
+func _cpu_fighters() -> Array:
+	var taken := []
+	for slot in _slots:
+		if not slot.is_empty():
+			taken.append(slot["fighter"])
+	var order := []
+	for id in Roster.ids():
+		if not taken.has(id):
+			order.append(id)
+	order += Roster.ids()
+	var fighters := []
 	for n in _cpus:
-		players.append({"device": "", "cpu": _cpu_level,
-				"fighter": ids[(players.size() + n) % ids.size()]})
-	var arena := _arena
-	if arena == "random":
-		var choices := ArenaList.ids()
-		choices.erase("test")  # The test arena is for training: chosen only on purpose.
-		var last: String = setup.get("arena", "")
-		if choices.size() > 1:
-			choices.erase(last)
-		arena = choices[(Time.get_ticks_msec() / 16) % choices.size()]
-	app.start_match({"players": players, "arena": arena, "arena_choice": _arena,
-			"stocks": _stocks, "cpus": _cpus, "cpu_level": _cpu_level})
+		fighters.append(order[n % order.size()])
+	return fighters
 
 
 func _refresh() -> void:
-	var cpus_left := _cpus  # Computer players take the first empty slots.
+	var cpu_fighters := _cpu_fighters()
+	var cpu_at := 0  # Computer players take the first empty slots.
 	for i in SLOTS:
-		var card: Array = _cards[i]
+		var card = _cards[i]
 		var slot: Dictionary = _slots[i]
-		var cpu_slot: bool = slot.is_empty() and cpus_left > 0
-		if cpu_slot:
-			cpus_left -= 1
-		card[0].modulate = Color(1, 1, 1, 1) if not slot.is_empty() or cpu_slot \
-				else Color(1, 1, 1, 0.45)
 		if not slot.is_empty():
-			card[1].text = "P%d  %s" % [i + 1, Devices.label(slot["device"])]
-			card[1].add_theme_color_override("font_color", COLORS[i])
-			card[2].text = "< %s >" % Roster.display_name(slot["fighter"])
-			card[3].text = "READY" if slot["ready"] else "Left / right: fighter\nAttack: ready"
-		elif cpu_slot:
-			card[1].text = "CPU  %s" % CpuPlayer.LEVEL_NAMES[_cpu_level]
-			card[1].add_theme_color_override("font_color", Color("b0b4c0"))
-			card[2].text = Roster.display_name(
-					Roster.ids()[(i) % Roster.ids().size()])
-			card[3].text = ""
+			var device: String = slot["device"]
+			var hint := "Shield: back" if slot["ready"] else "Left / right: fighter    Attack: ready"
+			card.show_card("player", "P%d   %s" % [i + 1, Devices.label(device)], slot["fighter"],
+					slot["ready"], Devices.special_key(device), hint)
+		elif cpu_at < cpu_fighters.size():
+			card.show_card("cpu", "CPU   %s" % CpuPlayer.LEVEL_NAMES[_cpu_level],
+					cpu_fighters[cpu_at], false, "", "Computer player")
+			cpu_at += 1
 		else:
-			card[1].text = "Join"
-			card[1].add_theme_color_override("font_color", Color.WHITE)
-			card[2].text = ""
-			card[3].text = "Press attack (Space, Enter, gamepad A or X)"
-	var arena_name := "Random" if _arena == "random" else ArenaList.display_name(_arena)
-	var values := [arena_name, str(_stocks), str(_cpus), CpuPlayer.LEVEL_NAMES[_cpu_level]]
-	var names := ["Arena", "Lives", "Computer players", "Computer level"]
-	var lines := PackedStringArray()
+			card.show_card("empty", "", "", false, "",
+					"Press attack:\nSpace, Enter, gamepad A or X")
+	var values := [str(_stocks), str(_cpus), CpuPlayer.LEVEL_NAMES[_cpu_level],
+			"On" if _hazards else "Off"]
+	var parts := PackedStringArray()
 	for r in ROWS.size():
-		var line := "%s:  < %s >" % [names[r], values[r]]
-		lines.append(("> " + line + " <") if r == _row and _any_ready() else line)
-	_settings.text = "\n".join(lines)
+		var part := "%s  < %s >" % [ROW_NAMES[r], values[r]]
+		parts.append(("[ %s ]" % part) if r == _row and _any_ready() else part)
+	_rules.text = "        ".join(parts)
+	_rules.add_theme_color_override("font_color", Color.WHITE if _any_ready() else Color("8a90a0"))
 	if _humans() == 0:
-		_hint.text = "Press attack to join.   Shield or B: back to the main menu"
+		_hint.text = "Press attack to join.    Shield or B: back to the main menu"
 	elif not _any_ready():
-		_hint.text = "Pick a fighter, then attack: ready.   Shield or B: leave"
+		_hint.text = "Pick a fighter, then attack: ready.    Shield or B: leave"
 	elif not _can_start():
-		_hint.text = "Ready players: up / down / left / right change the match." \
-				+ "   Needs two fighters: a second player or a computer player"
+		_hint.text = "Ready players: up / down / left / right change the rules." \
+				+ "    Two fighters needed: a second player or a computer player"
 	else:
-		_hint.text = "Ready players: up / down / left / right change the match.   Attack: fight!"
+		_hint.text = "Ready players: up / down / left / right change the rules." \
+				+ "    Attack: on to the arena"
 
 
 func _any_ready() -> bool:

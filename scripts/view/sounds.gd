@@ -58,6 +58,10 @@ static func _make(name: String) -> AudioStreamWAV:
 			samples = _mix([_noise(0.3, 0.8, 11), _tone(660.0, 0.3, 0.4, -600.0)])
 		"grab":
 			samples = _tone(220.0, 0.08, 0.5, 120.0)
+		"special":
+			samples = _mix([_tone(520.0, 0.14, 0.45, 900.0), _noise(0.06, 0.2, 5)])
+		"steam":
+			samples = _mix([_noise(0.45, 0.5, 17), _tone(180.0, 0.3, 0.25, 60.0)])
 		"ko":
 			samples = _mix([_noise(0.5, 0.9, 13), _tone(70.0, 0.6, 1.0, -30.0)])
 		"win":

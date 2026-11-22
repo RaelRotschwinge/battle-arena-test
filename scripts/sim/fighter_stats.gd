@@ -70,6 +70,9 @@ var width := 60.0
 var height := 100.0
 var fighter_name := "Test"
 var look := {"shape": "test", "colors": []}  # How the view draws it (fighter_look.gd).
+# For the fighter select screen: "role", "difficulty" (1 to 3), "line" (what it is like),
+# "special" (the special move's name) and "special_how" (what it does, without the key).
+var info := {}
 var attacks: Dictionary = Attacks.ATTACKS
 
 

@@ -6,8 +6,9 @@ const FighterStats := preload("res://scripts/sim/fighter_stats.gd")
 const FighterState := preload("res://scripts/sim/fighter_state.gd")
 const TuningStore := preload("res://scripts/view/tuning_store.gd")
 
-const HELP := "P1: W A S D, Space attack, left Shift shield     P2: arrows, Enter attack," \
-		+ " right Shift shield     Esc pause     F1 info     F2 tuning     F5 restart"
+const HELP := "P1: W A S D, Space attack, E special, left Shift shield     P2: arrows, Enter" \
+		+ " attack, Backspace special, right Shift shield     Esc pause     F1 info     F2 tuning" \
+		+ "     F5 restart"
 
 var sim
 var stats  # The tuned fighter's stats (the first player's).

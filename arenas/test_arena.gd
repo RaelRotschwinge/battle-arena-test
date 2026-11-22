@@ -5,6 +5,7 @@ extends "res://scripts/sim/arena.gd"
 
 func _init() -> void:
 	arena_name = "Test arena"
+	description = "The training ground: walls high enough to jump off. Random never picks it."
 	solids.assign([Rect2(360, 800, 1200, 300)])
 	thin.assign([Rect2(560, 620, 300, 16), Rect2(1060, 620, 300, 16)])
 	ledges.assign([

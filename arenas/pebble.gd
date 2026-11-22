@@ -5,6 +5,7 @@ extends "res://scripts/sim/arena.gd"
 
 func _init() -> void:
 	arena_name = "Pebble"
+	description = "Short distances and early knockouts: whoever guards the edges wins."
 	solids.assign([Rect2(610, 800, 700, 250)])
 	thin.assign([Rect2(810, 610, 300, 16)])
 	add_ledges_of_solids()

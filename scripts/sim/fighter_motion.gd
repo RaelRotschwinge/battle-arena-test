@@ -58,6 +58,7 @@ static func step(f, input, s, arena, blocked_ledges: Array = []) -> void:
 	var pressed_down: bool = input.down and not f.prev_input.down
 	var pressed_attack: bool = input.attack and not f.prev_input.attack
 	var pressed_shield: bool = input.shield and not f.prev_input.shield
+	var pressed_special: bool = input.special and not f.prev_input.special
 	var pressed_dir := 0
 	if input.right and not f.prev_input.right:
 		pressed_dir = 1
@@ -65,6 +66,9 @@ static func step(f, input, s, arena, blocked_ledges: Array = []) -> void:
 		pressed_dir = -1
 	_update_running(f, pressed_dir, dir, input, s)
 	_update_buffers(f, pressed_up, pressed_down, pressed_jump, pressed_attack, pressed_shield)
+	f.special_buffer = BUFFER_TICKS if pressed_special else maxi(f.special_buffer - 1, 0)
+	if f.hazard_cooldown > 0:
+		f.hazard_cooldown -= 1
 	if pressed_shield and f.mode == Mode.HITSTUN:
 		FighterDefense.press_in_hitstun(f)
 	if f.drop_ticks > 0:
@@ -81,7 +85,7 @@ static func step(f, input, s, arena, blocked_ledges: Array = []) -> void:
 		# The respawn platform holds the fighter until a key is pressed or the time is up. The
 		# key that leaves it acts at once.
 		var pressed_any: bool = pressed_jump or pressed_down or pressed_attack or pressed_shield \
-				or pressed_dir != 0
+				or pressed_special or pressed_dir != 0
 		if not pressed_any and f.mode_ticks < s.respawn_wait_ticks:
 			f.prev_input.copy_from(input)
 			return
@@ -151,6 +155,9 @@ static func step(f, input, s, arena, blocked_ledges: Array = []) -> void:
 	var before: Vector2 = f.velocity
 	var contact := _move_and_collide(f, s, arena)
 	var landed: bool = contact & LANDED != 0
+	if contact & HIT_WALL != 0 and f.attack.begins_with("special") and FighterCombat.is_active(f) \
+			and FighterCombat.data(f).get("move", {}).get("stop_at_wall", false):
+		FighterCombat.end_active(f, 0)  # A dash into a wall ends there.
 	if f.mode == Mode.AIR:
 		if landed:
 			_land_from_air(f, s)
@@ -184,7 +191,10 @@ static func step(f, input, s, arena, blocked_ledges: Array = []) -> void:
 		if f.mode == Mode.DODGE or f.mode == Mode.TECH:
 			f.dodge = ""
 		_set_mode(f, Mode.AIR)
-		f.attack = ""  # Sliding off the ground ends a ground attack.
+		var flies: bool = f.attack.begins_with("special") \
+				and FighterCombat.data(f).get("move", {}).get("fly", false)
+		if not flies:
+			f.attack = ""  # Sliding off the ground ends a ground attack; a flying dash goes on.
 	f.prev_input.copy_from(input)
 
 
@@ -231,8 +241,11 @@ static func _ground_actions(f, input, dir: int, pressed_up: bool, pressed_down: 
 		f.shield_drop -= 1
 	var free: bool = f.attack == "" and f.lag == 0
 	var lowering: bool = f.shield_drop > 0
+	var special := FighterCombat.special_for(f, false)
 	if free and not lowering and f.attack_buffer > 0:
 		FighterCombat.start(f, FighterCombat.ground_attack(f, input), dir)
+	elif free and not lowering and f.special_buffer > 0 and special != "":
+		FighterCombat.start_special(f, special, input, false)
 	elif free and f.jump_buffer > 0:
 		f.jump_buffer = 0
 		f.shield_drop = 0
@@ -244,11 +257,14 @@ static func _ground_actions(f, input, dir: int, pressed_up: bool, pressed_down: 
 		_set_mode(f, Mode.AIR)
 	elif pressed_up or pressed_down or pressed_dir != 0:
 		FighterCombat.repick(f, FighterCombat.ground_attack(f, input), dir)
+	FighterCombat.reaim(f, input, false)
 	if f.mode == Mode.GROUND:
 		var steer: bool = f.attack == "" and f.lag == 0 and f.shield_drop == 0
 		if f.attack == "dash":  # The dash attack carries the fighter forward.
 			f.velocity.x = move_toward(f.velocity.x, f.facing * s.run_speed * 0.6,
 					s.ground_friction * 0.5)
+		elif _special_motion(f):
+			pass
 		else:
 			_ground_control(f, dir, s, steer)
 
@@ -284,6 +300,9 @@ static func _shield_control(f, input, pressed_dir: int, pressed_down: bool) -> v
 	elif f.attack_buffer > 0 and FighterCombat.has(f, "grab"):
 		_set_mode(f, Mode.GROUND)
 		FighterCombat.start(f, "grab", 0)
+	elif f.special_buffer > 0 and FighterCombat.special_for(f, false) != "":
+		_set_mode(f, Mode.GROUND)  # The special comes out of the shield at once.
+		FighterCombat.start_special(f, FighterCombat.special_for(f, false), input, false)
 	elif pressed_dir != 0:
 		FighterDefense.start_dodge(f, "roll", Vector2(pressed_dir, 0.0))
 	elif pressed_down:
@@ -309,10 +328,16 @@ static func _air_control(f, input, dir: int, pressed_up: bool, pressed_down: boo
 		FighterDefense.start_dodge(f, "air", aim)
 		FighterDefense.dodge_control(f, s)
 		return
+	var special := FighterCombat.special_for(f, true)
 	if f.attack == "" and f.attack_buffer > 0:
 		FighterCombat.start(f, FighterCombat.air_attack(f, input), dir)
+	elif f.attack == "" and f.special_buffer > 0 and special != "":
+		FighterCombat.start_special(f, special, input, true)
 	elif pressed_up or pressed_down or pressed_dir != 0:
 		FighterCombat.repick(f, FighterCombat.air_attack(f, input), dir)
+	FighterCombat.reaim(f, input, true)
+	if _special_motion(f):
+		return
 	if f.attack == "ground_pound":
 		# A short stop in the air, then straight down fast until landing.
 		if FighterCombat.in_startup(f):
@@ -333,6 +358,7 @@ static func _air_control(f, input, dir: int, pressed_up: bool, pressed_down: boo
 		f.fast_falling = false
 		f.jump_rising = false
 		f.air_dodge_used = false
+		f.special_used = false
 	elif want_jump and f.jumps_left > 0:
 		# The double jump always adds its full height. Rising speeds add up the way jump heights
 		# do (as squares), so a double jump while still rising is worth as much as one at the top.
@@ -367,6 +393,30 @@ static func _air_control(f, input, dir: int, pressed_up: bool, pressed_down: boo
 			and absf(f.velocity.x) > s.air_speed
 	var rate: float = s.air_friction if dir == 0 or keep_momentum else s.air_accel
 	f.velocity.x = move_toward(f.velocity.x, dir * s.air_speed, rate)
+
+
+# A special with "move" data sets the fighter's speed itself: still in its startup when it
+# "stalls", along its aim at "speed" (plus "rise" upward) while active; at the start of its
+# recovery the speed drops to the share "keep". Returns true while it sets the speed.
+static func _special_motion(f) -> bool:
+	if not f.attack.begins_with("special"):
+		return false
+	var a := FighterCombat.data(f)
+	if not a.has("move"):
+		return false
+	var m: Dictionary = a["move"]
+	var t: int = f.attack_ticks
+	if t <= a["startup"]:
+		if m.get("stall", false):
+			f.velocity = Vector2.ZERO
+			return true
+		return false
+	if t <= a["startup"] + a["active"]:
+		f.velocity = f.special_aim * m["speed"] + Vector2(0.0, -m.get("rise", 0.0))
+		return true
+	if t == a["startup"] + a["active"] + 1:
+		f.velocity *= m.get("keep", 0.3)
+	return false
 
 
 # Launched by a hit: no control but a little drift, lighter gravity, the launch fades slowly.
@@ -472,11 +522,13 @@ static func _try_grab_ledge(f, s, arena, blocked_ledges: Array) -> void:
 		f.lift_used = false
 		f.lifting = false
 		f.air_dodge_used = false
+		f.special_used = false
 		f.dodge = ""
 		f.attack = ""  # Grabbing a ledge ends an air attack.
 		f.attack_buffer = 0  # Presses from before the grab do not act on the ledge.
 		f.jump_buffer = 0
 		f.shield_buffer = 0
+		f.special_buffer = 0
 		f.fast_falling = false
 		f.jump_rising = false
 		f.running = false
@@ -584,6 +636,8 @@ static func _set_mode(f, mode: int) -> void:
 static func _land_from_air(f, s) -> void:
 	if f.attack == "ground_pound":
 		f.lag = FighterCombat.data(f)["recovery"]
+	elif f.attack != "" and FighterCombat.data(f).has("landing_lag"):
+		f.lag = FighterCombat.data(f)["landing_lag"]
 	elif f.attack != "":
 		f.lag = mini(s.landing_lag_ticks, FighterCombat.ticks_left(f))
 	f.attack = ""
@@ -600,4 +654,5 @@ static func _land(f, s) -> void:
 	f.fast_falling = false
 	f.jump_rising = false
 	f.air_dodge_used = false
+	f.special_used = false
 	f.ledge_invuln_ok = true

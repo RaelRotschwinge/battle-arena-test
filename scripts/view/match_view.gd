@@ -12,6 +12,7 @@ const ArenaList := preload("res://arenas/arena_list.gd")
 const Devices := preload("res://scripts/view/devices.gd")
 const ArenaView := preload("res://scripts/view/arena_view.gd")
 const FighterView := preload("res://scripts/view/fighter_view.gd")
+const ShotView := preload("res://scripts/view/shot_view.gd")
 const HitEffects := preload("res://scripts/view/hit_effects.gd")
 const MatchCamera := preload("res://scripts/view/match_camera.gd")
 const Hud := preload("res://scripts/view/hud.gd")
@@ -27,8 +28,9 @@ const DEFAULT_SETUP := {"players": [{"device": "kb1", "cpu": 0, "fighter": "kade
 		{"device": "kb2", "cpu": 0, "fighter": "pip"}], "arena": "test", "stocks": 3}
 
 # players: one per fighter {"device": "kb1" (none for a computer), "cpu": 0 for a player or the
-# level 1 to 3, "fighter": a roster id}; arena: an arena id; stocks: lives. Set before the node
-# enters the tree.
+# level 1 to 3, "fighter": a roster id or "random" (rolled again at every start)}; arena: an arena
+# id; stocks: lives; hazards: the arena hazards on (default) or off. Set before the node enters
+# the tree.
 var setup := {}
 var app  # The main node, told when the players leave the match; null when run alone.
 var sim
@@ -41,6 +43,8 @@ var _sounds
 var _pause
 var _results
 var _fighter_views := []
+var _shot_view
+var _fighter_ids := []  # Per fighter: the roster id it plays this match (random rolled).
 var _cpus := []  # Per fighter: a computer player or null.
 var _show_boxes := false
 var _over_ticks := 0
@@ -58,6 +62,10 @@ func _ready() -> void:
 	_effects = HitEffects.new()
 	_effects.z_index = 1
 	add_child(_effects)
+	_shot_view = ShotView.new()
+	_shot_view.colors = PLAYER_COLORS
+	_shot_view.z_index = 1
+	add_child(_shot_view)
 	_camera = MatchCamera.new()
 	add_child(_camera)
 	_hud = Hud.new()
@@ -96,8 +104,10 @@ func _physics_process(_delta: float) -> void:
 	sim.step(inputs)
 	for event in sim.events:
 		_show_event(event)
+	_special_sounds()
 	for view in _fighter_views:
 		view.sync()
+	_shot_view.sync()
 	_arena_view.sync()
 	_camera.follow()
 	_hud.refresh()
@@ -143,10 +153,25 @@ func _show_event(event: Dictionary) -> void:
 		"armor":
 			_effects.add_block(event["position"], Color("e0b84a"))
 			_sounds.play("block")
+		"clank":
+			_effects.add_block(event["position"], Color.WHITE)
+			_sounds.play("block")
 		"ko":
 			_effects.add_ko(event["position"], PLAYER_COLORS[event["fighter"]])
 			_sounds.play("ko")
 			_camera.shake(14.0)
+
+
+# A special starting and a vent bursting have their own sound.
+func _special_sounds() -> void:
+	for f in sim.fighters:
+		if f.attack.begins_with("special") and f.attack_ticks == 1 and f.hitlag == 0:
+			_sounds.play("special")
+	if sim.arena.has_hazards():
+		for v in sim.arena.VENTS.size():
+			var phase: Array = sim.arena.vent_phase(v)
+			if phase[0] == "burst" and phase[1] == 0:
+				_sounds.play("steam")
 
 
 # The winner shows for a moment, then the results screen.
@@ -243,15 +268,22 @@ func _start() -> void:
 	var players: Array = setup["players"]
 	var all_stats := []
 	var kinds := {}  # Fighters of the same kind share their stats, so tuning changes them all.
-	for player in players:
-		var id: String = player.get("fighter", "test")
+	_seed += 1
+	_fighter_ids.clear()
+	for i in players.size():
+		var id: String = players[i].get("fighter", "test")
+		if id == "random":  # Rolled in the view, not in the simulation: a new pick every start.
+			var ids := Roster.ids()
+			id = ids[posmod(hash([Time.get_ticks_usec(), i, _seed]), ids.size())]
+		_fighter_ids.append(id)
 		if not kinds.has(id):
 			kinds[id] = Roster.make(id)
 			TuningStore.load_into(kinds[id], id)
 		all_stats.append(kinds[id])
-	sim = MatchSim.new(ArenaList.make(setup.get("arena", "test")), players.size(), all_stats,
+	var arena = ArenaList.make(setup.get("arena", "test"))
+	arena.hazards_on = setup.get("hazards", true)
+	sim = MatchSim.new(arena, players.size(), all_stats,
 			setup.get("stocks", MatchSim.DEFAULT_STOCKS))
-	_seed += 1
 	_cpus.clear()
 	var labels := []
 	var cpu_count := 0
@@ -278,6 +310,8 @@ func _start() -> void:
 		view.sync()
 		view.reset_physics_interpolation()
 		_fighter_views.append(view)
+	_shot_view.sim = sim
+	_shot_view.queue_redraw()
 	_camera.sim = sim
 	_camera.snap()
 	_hud.sim = sim
@@ -285,6 +319,6 @@ func _start() -> void:
 	_hud.reset()
 	_ui.sim = sim
 	_ui.stats = all_stats[0]
-	_ui.fighter_id = players[0].get("fighter", "test")
+	_ui.fighter_id = _fighter_ids[0]
 	_over_ticks = 0
 	Devices.swallow()

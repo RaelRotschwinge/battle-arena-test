@@ -35,6 +35,7 @@ static func draw(canvas: CanvasItem, f, player: Color, tint: Color, shake: Vecto
 			_brum(canvas, f, s, c1, c2, c3)
 		_:
 			_test(canvas, f, s, c1)
+	_special(canvas, f, s, c2, player)
 	if f.mode == Mode.LEDGE:  # Hands on the ledge.
 		canvas.draw_rect(Rect2(f.facing * s.width / 2.0 - 8.0, -s.height - 6.0, 16.0, 14.0), c2)
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -60,7 +61,7 @@ static func _squash(f, s) -> Vector2:
 
 # During an attack an arm or leg reaches from the body to the hitbox, so it is clear who hits.
 static func _limb(canvas: CanvasItem, f, color: Color) -> void:
-	if f.attack == "" or f.attack in ["grab"]:
+	if f.attack == "" or f.attack in ["grab"] or f.attack.begins_with("special"):
 		return
 	var box: Rect2 = FighterCombat.data(f)["box"]
 	if not box.has_area():
@@ -71,6 +72,41 @@ static func _limb(canvas: CanvasItem, f, color: Color) -> void:
 	var reach := 0.45 if FighterCombat.in_startup(f) else 0.9
 	canvas.draw_line(root, root.lerp(target, reach), color, 14.0)
 	canvas.draw_circle(root.lerp(target, reach), 10.0, color)
+
+
+# The specials show what they are: an orb growing in the hand before a Spark, feathers that flare
+# before a Swoop and streaks behind it, rings that spin around a Whirl.
+static func _special(canvas: CanvasItem, f, s, light: Color, player: Color) -> void:
+	if not f.attack.begins_with("special"):
+		return
+	var a: Dictionary = FighterCombat.data(f)
+	var t: int = f.attack_ticks
+	var middle := Vector2(0.0, -s.height * 0.5)
+	if a.has("shot"):
+		if t <= a["startup"]:
+			var offset: Vector2 = a["shot"]["offset"]
+			var radius: float = a["shot"]["size"].x / 2.0 * float(t) / a["startup"]
+			canvas.draw_circle(Vector2(offset.x * f.facing, offset.y), radius, player.lightened(0.5))
+			canvas.draw_circle(Vector2(offset.x * f.facing, offset.y), radius * 0.5, Color.WHITE)
+	elif a.has("multi"):
+		if t > a["startup"] and t <= a["startup"] + a["active"]:
+			for n in 3:
+				var turn := t * 0.7 + TAU * n / 3.0
+				canvas.draw_arc(middle, s.width * 1.05, turn, turn + 1.4, 12,
+						Color(light, 0.8), 8.0)
+	elif a.has("move"):
+		if t <= a["startup"]:
+			for n in 5:
+				var turn := -PI / 2.0 + (n - 2) * 0.5
+				var from: Vector2 = middle + Vector2(cos(turn), sin(turn)) * s.width * 0.5
+				canvas.draw_line(from, from + Vector2(cos(turn), sin(turn)) * (8.0 + t * 3.0),
+						light, 5.0)
+		elif t <= a["startup"] + a["active"]:
+			var back: Vector2 = -f.special_aim
+			for n in 3:
+				var side: Vector2 = back.orthogonal() * (n - 1) * s.width * 0.3
+				canvas.draw_line(middle + side, middle + side + back * s.width * 1.6,
+						Color(player.lightened(0.4), 0.6), 6.0)
 
 
 static func _test(canvas: CanvasItem, f, s, body: Color) -> void:

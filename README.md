@@ -4,17 +4,20 @@ A 2D platform fighter for 2 to 4 players. Every hit raises the target's damage p
 higher it is, the farther the target flies. Knock your opponents out of the arena to take their
 lives. The last fighter standing wins.
 
-**Status:** milestone 4, content and feel: three fighters (Kade, Pip, Brum), three arenas
-(Pebble, Terraces, Ferry) and the test arena, menus, 2 to 4 players on keyboard and gamepads,
-computer opponents in three levels, shield, dodges, grabs and the ways out of combos, effects,
-sounds and music made in code.
+**Status:** milestone 4.5, more content: three fighters (Kade, Pip, Brum), each with a special
+move of its own, seven arenas (Pebble, Terraces, Ferry, Flatiron, Cistern, Windlass, Kettle) and
+a training arena, a fighter select with stat sheets and an arena select with live previews, 2 to
+4 players on keyboard and gamepads, computer opponents in three levels, shield, dodges, grabs and
+the ways out of combos, effects, sounds and music made in code.
 
 ## Controls
 
-- Player 1: W A S D, Space attacks, left Shift or Ctrl shields
-- Player 2: arrow keys, Enter attacks, right Shift or Ctrl shields
-- Gamepads: stick or D-pad, A or Y jumps, X or B attacks, shoulder buttons shield, Start pauses
-- The direction held picks the attack; in the shield, a direction rolls or dodges and attack grabs
+- Player 1: W A S D, Space attacks, E special, left Shift or Ctrl shields
+- Player 2: arrow keys, Enter attacks, Backspace special, right Shift or Ctrl shields
+- Gamepads: stick or D-pad, A or Y jumps, X attacks, B special, shoulder buttons shield, Start
+  pauses
+- The direction held picks the attack and aims the special; in the shield, a direction rolls or
+  dodges and attack grabs
 - Esc pauses; F1 info and hitboxes, F2 tuning panel, F5 restart
 
 ## Built with

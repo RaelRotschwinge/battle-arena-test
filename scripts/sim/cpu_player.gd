@@ -13,18 +13,22 @@ const LEVEL_NAMES := ["", "Easy", "Medium", "Hard"]
 # reaction: ticks behind what it sees; jitter: plus or minus; shield, dodge, parry: chances to
 # defend an attack it sees coming; di, tech: chances when launched; edge: distance it keeps from
 # the edge; combo: hits in a row before it backs off; miss: chance to attack out of range; ko:
-# damage of the target from which it prefers strong attacks; grab: chance to grab a shield.
+# damage of the target from which it prefers strong attacks; grab: chance to grab a shield;
+# special: chance per tick to use its special when it fits.
 const LEVELS := [
 	{},
 	{"reaction": 28, "jitter": 4, "shield": 0.2, "dodge": 0.0, "parry": 0.0, "di": 0.0,
 			"tech": 0.0, "edge": 80.0, "combo": 2, "miss": 0.3, "ko": 80.0, "grab": 0.0,
-			"chase_air": false, "air_dodge": false, "rest_after_hit": 40, "think": 20},
+			"chase_air": false, "air_dodge": false, "rest_after_hit": 40, "think": 20,
+			"special": 0.01},
 	{"reaction": 16, "jitter": 4, "shield": 0.5, "dodge": 0.3, "parry": 0.0, "di": 0.5,
 			"tech": 0.5, "edge": 40.0, "combo": 3, "miss": 0.1, "ko": 100.0, "grab": 0.3,
-			"chase_air": true, "air_dodge": false, "rest_after_hit": 0, "think": 10},
+			"chase_air": true, "air_dodge": false, "rest_after_hit": 0, "think": 10,
+			"special": 0.03},
 	{"reaction": 9, "jitter": 4, "shield": 0.6, "dodge": 0.3, "parry": 0.25, "di": 0.85,
 			"tech": 0.8, "edge": 40.0, "combo": 4, "miss": 0.0, "ko": 90.0, "grab": 0.6,
-			"chase_air": true, "air_dodge": true, "rest_after_hit": 0, "think": 5},
+			"chase_air": true, "air_dodge": true, "rest_after_hit": 0, "think": 5,
+			"special": 0.05},
 ]
 const MOVE_SLACK := 12.0  # A move counts as reaching when its hitbox comes this close.
 
@@ -43,6 +47,7 @@ var _respawn_wait := -1
 var _last_damage := 0.0
 var _di := Vector2.ZERO
 var _teched_for := -1
+var _aim_up := false  # Its recovery special aims up.
 
 
 func _init(cpu_level: int = 2, fighter_index: int = 0, cpu_seed: int = 0) -> void:
@@ -93,6 +98,8 @@ func next_input(sim) -> FighterInput:
 			_ledge_wait = -1
 			if _off_stage(me, stage):
 				_recover(sim, me, input, stage, p)
+			elif _avoid_hazard(sim, me, input):
+				pass
 			elif not _defend(sim, me, input, p):
 				_fight(sim, me, input, stage, p)
 	_keep_on_stage(me, input, stage, p)
@@ -216,11 +223,18 @@ func _recover(sim, me, input, stage: Rect2, p: Dictionary) -> void:
 	input.right = inward > 0.0
 	var below: float = me.position.y - stage.position.y  # Positive: below the stage top.
 	var falling: bool = me.velocity.y > -2.0
+	if (falling or me.attack.begins_with("special")) \
+			and _recover_with_special(sim, me, input, stage):
+		return
 	if not falling or me.attack != "":
 		return
 	var depth := -100.0 if level == 1 else -40.0
 	var wall_near: bool = below > 20.0 and (absf(me.position.x - stage.position.x) < 50.0 \
 			or absf(me.position.x - stage.end.x) < 50.0)
+	# Any wall on the way in (a pillar, too): jump off it.
+	var inward_wall: bool = FighterMotion._touching_wall(me, me.stats, sim.arena) \
+			== int(signf(stage.get_center().x - me.position.x))
+	wall_near = wall_near or inward_wall
 	if wall_near and me.wall_jumps_used < me.stats.max_wall_jumps:
 		input.up = true
 	elif me.jumps_left > 0 and below > depth:
@@ -231,6 +245,84 @@ func _recover(sim, me, input, stage: Rect2, p: Dictionary) -> void:
 	elif p["air_dodge"] and not me.air_dodge_used and below > 40.0:
 		input.shield = true
 		input.up = true
+
+
+# A vent about to burst under it: walk out of it (medium and hard; easy does not look).
+func _avoid_hazard(sim, me, input) -> bool:
+	if level == 1 or me.mode != Mode.GROUND:
+		return false
+	var box := FighterMotion.box(me, me.stats)
+	if not sim.arena.hazard_warns(box):
+		return false
+	var stage: Rect2 = sim.arena.solids[0]
+	var way := 1 if me.position.x < stage.get_center().x else -1
+	if sim.arena.hazard_warns(box.grow_individual(0.0, 0.0, 120.0, 0.0)) \
+			and not sim.arena.hazard_warns(box.grow_individual(120.0, 0.0, 0.0, 0.0)):
+		way = -1
+	input.left = way < 0
+	input.right = way > 0
+	return true
+
+
+# Its special used to get back: a dash toward the stage (up and in when below it) or a sideways
+# spin when far out. Up is let go on the press and pressed fresh right after, so it aims. Returns
+# true while it uses the special.
+func _recover_with_special(sim, me, input, stage: Rect2) -> bool:
+	var inward := signf(stage.get_center().x - me.position.x)
+	if me.attack.begins_with("special"):
+		input.left = inward < 0.0
+		input.right = inward > 0.0
+		if _aim_up and me.attack_ticks <= FighterCombat.AIM_TICKS and not _hold.has("up"):
+			input.up = true
+			_hold["up"] = FighterCombat.AIM_TICKS
+		return true
+	var name := FighterCombat.special_for(me, true)
+	if name == "" or me.attack != "" or level == 1 and me.jumps_left > 0:
+		return false
+	var a := FighterCombat.data(me, name)
+	if not a.has("move"):
+		return false
+	var out_x: float = maxf(stage.position.x - me.position.x, me.position.x - stage.end.x)
+	var below: float = me.position.y - stage.position.y
+	var go := false
+	if a["move"].get("fly", false):  # A dash: once the jumps are used, or when far below.
+		go = me.jumps_left == 0 and me.velocity.y > 0.0 or below > 160.0
+	else:  # A sideways spin: when it is still far out to the side.
+		go = out_x > 100.0 and below > -120.0 and me.jumps_left == 0
+	if not go:
+		return false
+	_aim_up = below > -60.0
+	_hold.erase("up")
+	input.up = false
+	input.left = inward < 0.0
+	input.right = inward > 0.0
+	input.special = true
+	return true
+
+
+# Whether its special fits now against the target: a Spark from a distance it can throw over,
+# a Swoop into a target a dash away, a Whirl when one or more fighters are close. Then only at the
+# level's chance, so it does not spam.
+func _special_fits(sim, me, t: Dictionary, p: Dictionary) -> bool:
+	var in_air: bool = me.mode != Mode.GROUND
+	var name := FighterCombat.special_for(me, in_air)
+	if name == "" or _chance(sim, 15) >= p["special"]:
+		return false
+	var a := FighterCombat.data(me, name)
+	var to: Vector2 = t["position"] - me.position
+	var dx := absf(to.x)
+	if a.has("shot"):
+		return dx > 220.0 and dx < 520.0 and absf(to.y) < 80.0
+	if a.has("multi"):
+		var close := 0
+		for o in _seen_now(sim):
+			if not o["out"] and o["position"].distance_to(me.position) < 120.0 \
+					and o["position"] != me.position:
+				close += 1
+		return close >= 1 and dx < 100.0 and absf(to.y) < 90.0 and not in_air
+	if a.has("move"):
+		return dx > 110.0 and dx < 230.0 and absf(to.y) < 60.0
+	return false
 
 
 # Sees an attack coming its way and picks a defence once for it: shield (or a parry), a spot
@@ -279,6 +371,11 @@ func _fight(sim, me, input, stage: Rect2, p: Dictionary) -> void:
 	var to: Vector2 = t["position"] - me.position
 	var side := 1 if to.x >= 0.0 else -1
 	var grounded: bool = me.mode == Mode.GROUND
+	if (me.attack == "" and me.lag == 0) and _rest == 0 and _special_fits(sim, me, t, p):
+		input.special = true
+		input.left = side < 0
+		input.right = side > 0
+		return
 	if (me.attack == "" and me.lag == 0) and _rest == 0:
 		var move := _pick_move(sim, me, t, p)
 		if move != "":
@@ -304,6 +401,15 @@ func _fight(sim, me, input, stage: Rect2, p: Dictionary) -> void:
 	if grounded and above and (p["chase_air"] or t["mode"] == Mode.GROUND) \
 			and _chance(sim, 12) < 0.08:
 		_hold["up"] = 10
+	# Platforms: a target far above gets the double jump at the top of the jump; a target below
+	# a thin platform it stands on makes it drop through.
+	if not grounded and to.y < -80.0 and absf(to.x) < 260.0 and me.velocity.y > -3.0 \
+			and me.jumps_left > 0 and not _last.up:
+		input.up = true
+	var below: bool = to.y > 100.0 and absf(to.x) < 320.0 and t["mode"] == Mode.GROUND
+	if grounded and below and not _last.down and _chance(sim, 16) < 0.1 \
+			and FighterMotion._stands_on_thin(me, me.stats, sim.arena):
+		input.down = true
 
 
 func _pick_move(sim, me, t: Dictionary, p: Dictionary) -> String:
@@ -382,7 +488,7 @@ func _keep_on_stage(me, input, stage: Rect2, p: Dictionary) -> void:
 # Attack, jump and shield act on a new press, so a key held from the last tick is let go for one
 # tick first.
 func _press_fresh(input) -> void:
-	for key in ["attack"]:
+	for key in ["attack", "special"]:
 		if input.get(key) and _last.get(key) and not _hold.has(key):
 			input.set(key, false)
 	if input.up and _last.up and not _hold.has("up") and not input.attack:

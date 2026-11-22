@@ -11,15 +11,19 @@ const FighterInput := preload("res://scripts/sim/fighter_input.gd")
 
 const KEYBOARD := {
 	"kb1": {"left": [KEY_A], "right": [KEY_D], "up": [KEY_W], "down": [KEY_S],
-			"attack": [KEY_SPACE], "side": KEY_LOCATION_LEFT},
+			"attack": [KEY_SPACE], "special": [KEY_E, KEY_Q], "side": KEY_LOCATION_LEFT},
 	"kb2": {"left": [KEY_LEFT], "right": [KEY_RIGHT], "up": [KEY_UP], "down": [KEY_DOWN],
-			"attack": [KEY_ENTER, KEY_KP_ENTER], "side": KEY_LOCATION_RIGHT},
+			"attack": [KEY_ENTER, KEY_KP_ENTER], "special": [KEY_BACKSPACE, KEY_KP_0],
+			"side": KEY_LOCATION_RIGHT},
 }
+# The special key as the players see it, per device kind.
+const SPECIAL_KEY := {"kb1": "E", "kb2": "Backspace", "pad": "B"}
 const STICK := 0.5  # A stick tilted this far counts as a direction.
 const RUN_TILT := 0.9  # Tilted this far sideways, the fighter runs at once.
 const TRIGGER := 0.5
 const PAD_JUMP := [JOY_BUTTON_A, JOY_BUTTON_Y]
-const PAD_ATTACK := [JOY_BUTTON_X, JOY_BUTTON_B]
+const PAD_ATTACK := [JOY_BUTTON_X]
+const PAD_SPECIAL := [JOY_BUTTON_B]
 const PAD_SHIELD := [JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER]
 const MENU_ACTIONS := ["up", "down", "left", "right", "confirm", "back", "start"]
 const REPEAT_DELAY := 20  # Ticks a held direction waits before it repeats in menus.
@@ -64,11 +68,15 @@ static func label(device: String) -> String:
 	return "Gamepad %d" % (_pad(device) + 1)
 
 
+static func special_key(device: String) -> String:
+	return SPECIAL_KEY.get(device, SPECIAL_KEY["pad"])
+
+
 static func read(device: String) -> FighterInput:
 	var input := FighterInput.new()
 	if KEYBOARD.has(device):
 		var layout: Dictionary = KEYBOARD[device]
-		for action in ["left", "right", "up", "down", "attack"]:
+		for action in ["left", "right", "up", "down", "attack", "special"]:
 			input.set(action, _keys(layout[action]))
 		input.shield = _modifier(KEY_SHIFT, layout["side"]) or _modifier(KEY_CTRL, layout["side"])
 		return input
@@ -84,6 +92,7 @@ static func read(device: String) -> FighterInput:
 	input.run = absf(x) > RUN_TILT
 	input.jump = _buttons(pad, PAD_JUMP)
 	input.attack = _buttons(pad, PAD_ATTACK)
+	input.special = _buttons(pad, PAD_SPECIAL)
 	input.shield = _buttons(pad, PAD_SHIELD) \
 			or Input.get_joy_axis(pad, JOY_AXIS_TRIGGER_LEFT) > TRIGGER \
 			or Input.get_joy_axis(pad, JOY_AXIS_TRIGGER_RIGHT) > TRIGGER

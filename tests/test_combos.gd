@@ -6,6 +6,7 @@ extends "res://tests/base_test.gd"
 const MatchSim := preload("res://scripts/sim/match_sim.gd")
 const TestArena := preload("res://arenas/test_arena.gd")
 const ComboSearch := preload("res://tests/combo_search.gd")
+const Roster := preload("res://fighters/roster.gd")
 
 const MAX_HITS := 4  # Longest true combo allowed against a defender that tries to get out.
 const MAX_HITS_STANDING := 6  # Even against a defender that does nothing.
@@ -36,3 +37,13 @@ func test_no_endless_combo_even_against_a_defender_that_does_nothing() -> void:
 		var result := _search(damage, false)
 		assert_true(result["hits"] <= MAX_HITS_STANDING, "from %d %%: %d hits (%s)" % [damage,
 				result["hits"], " > ".join(result["path"])])
+
+
+func test_no_long_combo_with_any_fighter_and_its_special() -> void:
+	for id in Roster.ids():
+		for damage in [0.0, 60.0]:
+			var result := _search(damage, true, [Roster.make(id), Roster.make("kade")])
+			assert_true(result["hits"] <= MAX_HITS, "%s from %d %%: %d hits (%s)" % [id, damage,
+					result["hits"], " > ".join(result["path"])])
+			assert_true(not result["ko"], "%s from %d %%: a combo takes a life (%s)" % [id, damage,
+					" > ".join(result["path"])])

@@ -147,8 +147,9 @@ func _keys(keys: Array) -> FighterInput:
 	return input
 
 
-# The attacker's choices from this state: every ground attack, jumps into every air attack at
-# several heights, air attacks at once, a double jump into them, and a short walk first.
+# The attacker's choices from this state: every ground attack and the special, jumps into every
+# air attack and the air special at several heights, air attacks at once, a double jump into them,
+# and a short walk first.
 func _macros(snap: Dictionary) -> Array:
 	sim.restore(snap)
 	var me = sim.fighters[a]
@@ -159,10 +160,12 @@ func _macros(snap: Dictionary) -> Array:
 	var behind := "left" if facing == "right" else "right"
 	var list := []
 	var airs := {"nair": ["attack"], "fair": [facing, "attack"], "bair": [behind, "attack"],
-			"up_air": ["up", "attack"], "ground_pound": ["down", "attack"]}
+			"up_air": ["up", "attack"], "ground_pound": ["down", "attack"],
+			"special": [toward, "special"], "special up": ["up", toward, "special"],
+			"special down": ["down", toward, "special"]}
 	if me.mode == Mode.GROUND or me.mode == Mode.JUMP_SQUAT:
 		var grounds := {"jab": ["attack"], "side": [toward, "attack"], "up": ["up", "attack"],
-				"down": ["down", "attack"]}
+				"down": ["down", "attack"], "special": [toward, "special"]}
 		if sim.tick == 0 or them.held_by == a:
 			for throw in ["down", "up", toward, away]:
 				var keys := [["shield"], ["shield", "attack"]]

@@ -5,6 +5,7 @@ extends "res://scripts/sim/arena.gd"
 
 func _init() -> void:
 	arena_name = "Terraces"
+	description = "A wide stage with platforms on two levels, for long fights up and down."
 	solids.assign([Rect2(200, 820, 1520, 300)])
 	thin.assign([Rect2(300, 640, 260, 16), Rect2(1360, 640, 260, 16), Rect2(760, 480, 400, 16)])
 	add_ledges_of_solids()

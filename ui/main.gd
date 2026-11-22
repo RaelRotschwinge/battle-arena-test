@@ -1,18 +1,20 @@
-# The game's main node (game design, "Menus"): the main menu, the controls overview, the join and
-# select screen and the match, one at a time. It reads the devices once per tick for all of them
-# and keeps the last match setup, so a rematch or a new pick starts from it.
+# The game's main node (game design, "Menus"): the main menu, the controls overview, the fighter
+# select, the arena select and the match, one at a time. It reads the devices once per tick for
+# all of them and keeps the last match setup, so a rematch or a new pick starts from it.
 extends Node
 
 const Devices := preload("res://scripts/view/devices.gd")
 const MatchView := preload("res://scripts/view/match_view.gd")
 const SelectScreen := preload("res://ui/select_screen.gd")
+const ArenaSelect := preload("res://ui/arena_select.gd")
 const Overlay := preload("res://ui/overlay.gd")
 
-const CONTROLS := """Keys left:  A D move,  W jump,  S down,  Space attack,  left Shift or Ctrl shield
-Keys right:  arrows move and jump,  Enter attack,  right Shift or Ctrl shield
-Gamepad:  stick or D-pad move,  A or Y jump,  X or B attack,  shoulder buttons shield,  Start pause
+const CONTROLS := """Keys left:  A D move,  W jump,  S down,  Space attack,  E special,  left Shift or Ctrl shield
+Keys right:  arrows move and jump,  Enter attack,  Backspace special,  right Shift or Ctrl shield
+Gamepad:  stick or D-pad move,  A or Y jump,  X attack,  B special,  shoulder buttons shield,  Start pause
 
 The direction held picks the attack: none, side, up or down, on the ground and in the air.
+Special: each fighter has its own (see the fighter select); the direction aims or steers it.
 Shield: hold it.  In the shield: left or right rolls, down dodges, attack grabs, up jumps.
 In the air the shield key dodges, also with a direction.
 Launched: hold a direction to bend your flight, press shield just before you hit the ground.
@@ -64,6 +66,17 @@ func show_select() -> void:
 	var select := SelectScreen.new()
 	select.app = self
 	select.setup = _setup
+	_screen = select
+	add_child(select)
+
+
+# After the fighter select: the players and rules are set, the arena comes next.
+func show_arena_select(setup: Dictionary) -> void:
+	_setup = setup
+	_clear()
+	var select := ArenaSelect.new()
+	select.app = self
+	select.setup = setup
 	_screen = select
 	add_child(select)
 

@@ -1,5 +1,6 @@
-# Pip, the light one (game design, "Fighters"): small, quick and floaty, with two jumps in the
-# air and a neutral air that hits three times. Light hits and a light body: Pip flies early.
+# Pip, the quick one (game design, "Fighters"): small, quick and floaty, with two jumps in the
+# air and a neutral air that hits three times. Light hits; floaty, so Pip flies out early upward.
+# Special: Swoop, a dash in any of eight directions that also brings Pip home.
 extends RefCounted
 
 const Attacks := preload("res://scripts/sim/attacks.gd")
@@ -35,11 +36,25 @@ const MOVES := {
 			"damage": 4.0, "base": 4.0, "growth": 5.0, "angle": 80.0, "away": true},
 	"ground_pound": {"startup": 3, "active": 0, "recovery": 6, "box": Rect2(-32, -34, 64, 50),
 			"damage": 8.0, "base": 8.9, "growth": 8.8, "angle": -80.0},
+	# Swoop: a still moment, then 12 ticks at 18 px per tick (216 px) the way held. It stops on a
+	# fighter, a shield or a wall; a hit cuts 6 ticks off the recovery. Once per time in the air.
+	"special": {"startup": 6, "active": 12, "recovery": 28, "box": Rect2(-40, -92, 80, 100),
+			"damage": 6.0, "base": 6.0, "growth": 8.0, "angle": 35.0, "aim": "eight",
+			"stop_on_contact": 6, "landing_lag": 12,
+			"move": {"speed": 18.0, "stall": true, "keep": 0.3, "stop_at_wall": true, "fly": true}},
+	"special_air": {"startup": 6, "active": 12, "recovery": 20, "box": Rect2(-40, -92, 80, 100),
+			"damage": 6.0, "base": 6.0, "growth": 8.0, "angle": 35.0, "aim": "eight",
+			"stop_on_contact": 6, "landing_lag": 12, "once_per_air": true,
+			"move": {"speed": 18.0, "stall": true, "keep": 0.3, "stop_at_wall": true, "fly": true}},
 }
 
 
 static func apply(stats) -> void:
 	stats.fighter_name = "Pip"
+	stats.info = {"role": "Rushdown", "difficulty": 3,
+			"line": "Small, quick and floaty. Never stops moving; flies out early upward.",
+			"special": "Swoop",
+			"special_how": "dashes the way you hold; once in the air, brings you home"}
 	stats.look = {"shape": "pip", "colors": [Color("6ec6ff"), Color("f6e7c1"), Color("ff9f43")]}
 	stats.width = 50.0
 	stats.height = 84.0

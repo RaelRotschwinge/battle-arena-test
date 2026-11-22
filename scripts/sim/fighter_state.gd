@@ -20,7 +20,8 @@ const _FIELDS := [
 	"shield_drop", "ticks_since_shield", "dodge", "dodge_dir", "dodge_streak",
 	"ticks_since_dodge", "air_dodge_used", "tech_window", "tech_lockout", "ledge_invuln_ok",
 	"climb_next", "holding", "held_by", "grab_immune", "throw", "last_hit_by", "kos", "falls",
-	"self_destructs", "damage_dealt",
+	"self_destructs", "damage_dealt", "special_buffer", "special_used", "special_aim", "shot_out",
+	"hazard_cooldown",
 ]
 
 var position := Vector2.ZERO  # Feet, horizontal middle. Pixels, y points down.
@@ -84,6 +85,11 @@ var kos := 0  # Knockouts scored, for the results screen.
 var falls := 0  # Lives lost.
 var self_destructs := 0  # Lives lost without being hit.
 var damage_dealt := 0.0
+var special_buffer := 0  # Ticks left in which a press of the special key waits to act.
+var special_used := false  # The air special was used in this time in the air (if it is limited).
+var special_aim := Vector2.RIGHT  # The way the current special goes (unit vector).
+var shot_out := false  # A shot of this fighter is flying: its special throws no second one.
+var hazard_cooldown := 0  # Ticks left in which an arena hazard does not hit this fighter again.
 var stale: Array = []  # Names of the fighter's last attacks that hit, newest last.
 var prev_input := FighterInput.new()  # The input of the previous tick, to see new presses.
 var stats  # The fighter's kind: values and moves. Not part of the copy.

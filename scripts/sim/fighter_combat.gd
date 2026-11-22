@@ -7,6 +7,7 @@ const Mode = preload("res://scripts/sim/fighter_state.gd").Mode
 
 const PICK_TICKS := 2  # A direction pressed this many ticks after attack still picks the attack.
 const UP_FRESH_TICKS := 6  # Up counts for an attack only this many ticks after it was pressed.
+const AIM_TICKS := 3  # A direction pressed this many ticks after the special still aims it.
 const HITLAG_BASE := 3.0  # Hit pause in ticks: this plus HITLAG_PER_DAMAGE per point of damage.
 const HITLAG_PER_DAMAGE := 0.5
 const COMBO_GUARD_FROM := 4  # From the fourth hit in a row in hitstun, hitstun gets shorter.
@@ -89,6 +90,57 @@ static func air_attack(f, input) -> String:
 	return "nair"
 
 
+# The special move for where the fighter is: "special" on the ground, "special_air" in the air.
+# "" when it has none or may not use it now: its shot still flies, or the air special is limited
+# to once per time in the air and was used.
+static func special_for(f, in_air: bool) -> String:
+	var name := "special_air" if in_air else "special"
+	if not has(f, name):
+		return ""
+	var a := data(f, name)
+	if a.has("shot") and f.shot_out:
+		return ""
+	if in_air and a.get("once_per_air", false) and f.special_used:
+		return ""
+	return name
+
+
+static func start_special(f, name: String, input, in_air: bool) -> void:
+	start(f, name, input.dir())
+	f.special_buffer = 0
+	if in_air and data(f).get("once_per_air", false):
+		f.special_used = true
+	f.special_aim = special_aim(f, input, in_air)
+
+
+# The way the special goes from the held direction: "eight" any of 8 directions, "slant" forward,
+# 45 degrees up or down, "side" left or right; else the way the fighter faces. Up counts only when
+# pressed shortly before, as for attacks; on the ground nothing aims down.
+static func special_aim(f, input, in_air: bool) -> Vector2:
+	var x: int = input.dir()
+	var up: bool = input.up and f.ticks_since_up <= UP_FRESH_TICKS
+	var y: int = int(input.down) - int(up)
+	if not in_air:
+		y = mini(y, 0)
+	match data(f).get("aim", ""):
+		"eight":
+			if x == 0 and y == 0:
+				return Vector2(f.facing, 0.0)
+			return Vector2(x, y).normalized()
+		"slant":
+			return Vector2(f.facing, y).normalized()
+	return Vector2(f.facing, 0.0)
+
+
+# In the first ticks of a special a newly held direction still aims and turns it.
+static func reaim(f, input, in_air: bool) -> void:
+	if not f.attack.begins_with("special") or f.attack_ticks > AIM_TICKS:
+		return
+	if input.dir() != 0:
+		f.facing = input.dir()
+	f.special_aim = special_aim(f, input, in_air)
+
+
 static func start(f, name: String, dir: int) -> void:
 	f.attack = name
 	f.attack_ticks = 0
@@ -104,8 +156,9 @@ static func start(f, name: String, dir: int) -> void:
 static func repick(f, name: String, dir: int) -> void:
 	if f.attack == "" or f.attack_ticks > PICK_TICKS or name == f.attack:
 		return
-	if f.attack in ["grab", "getup"] or name == "fair" and f.attack == "bair":
-		return  # A grab and a getup attack stay what they are; a back air stays a back air.
+	if f.attack in ["grab", "getup"] or name == "fair" and f.attack == "bair" \
+			or f.attack.begins_with("special"):
+		return  # A grab, a getup attack and a special stay what they are; a back air too.
 	if f.lifting:  # The lift was not used after all.
 		f.lifting = false
 		f.lift_used = false
@@ -114,7 +167,7 @@ static func repick(f, name: String, dir: int) -> void:
 
 
 static func _begin(f, name: String, dir: int) -> void:
-	if dir != 0 and (name == "side" or name == "fair" or name == "up_air" or name == "dash"):
+	if dir != 0 and (name in ["side", "fair", "up_air", "dash"] or name.begins_with("special")):
 		f.facing = dir
 	if name == "up" or name == "up_air":
 		f.jump_buffer = 0  # The up press belongs to the attack, not to a jump.
@@ -146,6 +199,13 @@ static func advance(f) -> void:
 				f.hit_mask = 0
 	if f.attack_ticks > a["startup"] + a["active"] + a["recovery"]:
 		f.attack = ""
+
+
+# Jumps to the end of the active time of the current attack, minus cut ticks of its recovery: a
+# dash that hits, is blocked or reaches a wall stops there.
+static func end_active(f, cut: int) -> void:
+	var a := data(f)
+	f.attack_ticks = maxi(f.attack_ticks, a["startup"] + a["active"] + cut)
 
 
 static func in_startup(f) -> bool:
@@ -234,8 +294,10 @@ static func apply_hit(target, a: Dictionary, side: int, damage_scale: float = 1.
 	target.jump_rising = false
 	target.lifting = false
 	target.lift_used = false  # A hit gives the lift of the up air back,
-	target.air_dodge_used = false  # the air dodge
+	target.air_dodge_used = false  # the air dodge, the air special
 	target.ledge_invuln_ok = true  # and the invulnerability of the next ledge grab.
+	target.special_used = false
+	target.special_buffer = 0
 	target.dodge = ""
 	target.shield_stun = 0
 	target.shield_drop = 0

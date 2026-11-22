@@ -10,6 +10,7 @@ const FighterCombat := preload("res://scripts/sim/fighter_combat.gd")
 const CpuPlayer := preload("res://scripts/sim/cpu_player.gd")
 const Roster := preload("res://fighters/roster.gd")
 const ArenaList := preload("res://arenas/arena_list.gd")
+const StatSheet := preload("res://fighters/stat_sheet.gd")
 const Mode = preload("res://scripts/sim/fighter_state.gd").Mode
 
 const MOVES := ["jab", "side", "up", "down", "dash", "getup", "grab", "nair", "fair", "bair",
@@ -134,8 +135,54 @@ func test_the_ferry_carries_a_fighter_and_replays_the_same() -> void:
 	assert_eq(sim.snapshot(), after, "the same after a restore")
 
 
+func test_the_windlass_lift_carries_a_fighter_up_and_down() -> void:
+	var sim := MatchSim.new(ArenaList.make("windlass"), 1)
+	var f = sim.fighters[0]
+	var lift: Rect2 = sim.arena.thin[2]
+	f.position = Vector2(lift.get_center().x, lift.position.y - 2.0)
+	f.mode = Mode.AIR
+	for t in 5:
+		sim.step([_input([])])
+	assert_eq(f.mode, Mode.GROUND, "stands on the lift")
+	var lowest: float = f.position.y
+	var highest: float = f.position.y
+	for t in 840:
+		sim.step([_input([])])
+		lowest = maxf(lowest, f.position.y)
+		highest = minf(highest, f.position.y)
+	assert_true(lowest - highest > 250.0, "rode up and down, %.0f px" % (lowest - highest))
+	assert_eq(f.position.y, sim.arena.thin[2].position.y, "still on the lift")
+
+
+# Stands a fighter on Kettle's first vent and waits for its burst.
+func _kettle(damage: float, hazards: bool, keys: Array = []) -> MatchSim:
+	var arena = ArenaList.make("kettle")
+	arena.hazards_on = hazards
+	var sim := MatchSim.new(arena, 1, Roster.make("pip"))
+	var f = sim.fighters[0]
+	f.position = Vector2(arena.VENTS[0], 820.0)
+	f.damage = damage
+	for t in 480:
+		sim.step([_input(keys)])
+		if f.mode == Mode.GROUND and absf(f.position.x - arena.VENTS[0]) > 1.0:
+			f.position.x = arena.VENTS[0]  # Back onto the vent after landing.
+	return sim
+
+
+func test_kettle_vents_throw_up_but_never_knock_out() -> void:
+	var sim := _kettle(0.0, true)
+	assert_eq(sim.fighters[0].damage, 6.0, "one burst: 6 %")
+	var high := _kettle(300.0, true)
+	assert_eq(high.fighters[0].stocks, 3, "even at 300 % a burst does not knock out")
+	assert_true(high.fighters[0].damage > 300.0, "it did hit")
+	var off := _kettle(0.0, false)
+	assert_eq(off.fighters[0].damage, 0.0, "hazards off: the vents stay cold")
+	var shield := _kettle(0.0, true, ["shield"])
+	assert_eq(shield.fighters[0].damage, 0.0, "a shield takes the burst")
+
+
 func test_computer_players_come_back_on_every_arena_with_every_fighter() -> void:
-	for arena_id in ["pebble", "terraces", "ferry"]:
+	for arena_id in ArenaList.ids():
 		var ids := Roster.ids()
 		var sim := MatchSim.new(ArenaList.make(arena_id), 3,
 				[Roster.make(ids[0]), Roster.make(ids[1]), Roster.make(ids[2])])
@@ -147,3 +194,9 @@ func test_computer_players_come_back_on_every_arena_with_every_fighter() -> void
 		for i in 3:
 			assert_eq(sim.fighters[i].self_destructs, 0, "%s: %s does not fall by itself" % [
 					arena_id, ids[i]])
+
+
+func test_the_stat_sheet_follows_the_data() -> void:
+	var expected := {"kade": [3, 3, 3, 4], "pip": [2, 5, 3, 5], "brum": [5, 1, 5, 3]}
+	for id in expected:
+		assert_eq(StatSheet.pips(Roster.make(id)), expected[id], id)
