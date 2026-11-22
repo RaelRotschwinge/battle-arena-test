@@ -233,17 +233,25 @@ plays out the same way (`scripts/sim/cpu_player.gd`).
 ## Menus
 
 - **Main menu:** Play, Controls (a page of all keys and moves), Quit.
-- **Choose your fighters:** four panels side by side, one per player. Each keyboard layout and
-  each gamepad joins with its attack key or button and picks a fighter with left and right (Kade,
-  Pip, Brum or Random, rolled anew at every match start); attack again is ready, the shield key or
-  B steps back. Several players may pick the same fighter. Each panel shows the fighter as it
+- **Choose your fighters:** four panels side by side, one per player (P1 to P4). Each player
+  chooses an input device (a keyboard layout or a gamepad) and locks it in
+  (`ui/device_slots.gd`): a player may only choose devices that no player before him has locked;
+  when a player locks a device a later player holds, the later one moves on to his next free
+  device and has to lock again. Only a locked device steers its panel. Pressing attack on a free
+  device joins the next empty panel with it, locked (the quick way); pressing attack on a device
+  a panel has chosen locks that panel. In a panel, up and down switch between the fighter and the
+  device row, left and right change them (changing the device opens the panel again). Fighters:
+  Kade, Pip, Brum or Random (rolled anew at every match start); attack is ready (once the device
+  is locked), the shield key or B steps back. Several players may pick the same fighter. Each panel shows the fighter as it
   looks in the match on a ring in the player's color, its name, role and difficulty (one to three
   stars), its stat sheet (section "Fighters"), one line about it, and its special: name, the
   player's own key and what it does. Computer players fill the next empty panels with the
   fighters no player picked first. Ready players change the rules at the bottom with the
   directions: lives (1 to 5), computer players and their level, hazards on or off. Attack goes on
-  to the arena once everyone who joined is ready and there are two fighters at least. The screen
-  remembers the last setup.
+  to the arena once everyone who joined is locked and ready and there are two fighters at least.
+  The screen remembers the last setup.
+- **Mouse:** every menu also works with the mouse: menu options, joining a panel, the arrows,
+  the lock, Ready, leaving, the rules, the arena tiles and the buttons to go on or back.
 - **Choose the arena:** a big live preview of the arena under the cursor (moving platforms move,
   vents puff and burst) with its name, size, platforms and what makes it different, and a grid
   of live tiles: the seven arenas, Training (the test arena) and Random (any arena but Training,
@@ -313,6 +321,28 @@ in it straight up once (6 %, a fixed launch that never knocks anyone out by itse
 anyone). The two vents take turns (8 seconds per round). A shield takes the burst. The rule
 "Hazards" (fighter select, on by default) turns them off: then the vents stay cold.
 
+## Look
+
+Everything is drawn in code as clean flat vector art (no image files): shapes with antialiased
+dark outlines, a light and a dark tone, and motion everywhere.
+
+- **Fighters** (`scripts/view/fighter_art.gd`, `fighter_pose.gd`, `fighter_strike.gd`): a pose for
+  every mode (idle breathing and blinking, walk and run cycles, jump, fall, ledge, shield, dodges,
+  hitstun tumble) and for every attack, with a wind-up glint and smear arcs; afterimages on
+  dodges and dashes, a white flash on a hit, sweat from 100 % and steam from 150 %, a shield that
+  ripples and flashes on a parry, a name tag in the player's color.
+- **Arenas** (`scripts/view/backdrop_*.gd`, `arena_decor.gd`): a themed backdrop per arena in
+  parallax layers with ambient motion, textured platforms, the moving platforms' machinery, depth
+  fog toward the bottom, Kettle's vents that glow, puff and burst.
+- **Effects and HUD** (`hit_effects.gd`, `hud.gd`, `match_camera.gd`): hit sparks that grow with the
+  launch, a knockout beam in the player's color, effects for blocks, parries, shield breaks,
+  clanks and grabs, a light pillar on respawn; player cards with portraits, a popping damage
+  number and life tokens, bubbles at the screen edge for fighters out of view, "GO!" and "GAME!",
+  a camera that eases in at the start, punches in on strong hits and slows the last knockout.
+- **Menus** (`ui/`): an animated main menu with the logo and the three fighters, wipes between
+  screens, animated fighter cards, an arena grid with a live big preview, styled pause and
+  results cards with the winner on show.
+
 ## Camera
 
 One shared camera that keeps all fighters in view, zooms out as they spread and stops at the
@@ -357,13 +387,16 @@ air, left or right the forward air, up the up air, down the ground pound (sectio
   ground) or the up air, not a jump. Attack pressed during the take-off of a jump (starting value:
   3 ticks) gives the uppercut at once instead of the jump.
 
-Players join by pressing their attack key or button (section "Menus"). In menus, attack or A
-chooses and the shield key or B goes back (B is the special only in a match). Remapping keys
+Players join by pressing their attack key or button or with the mouse, and choose and lock their
+device on the fighter select (section "Menus"). In menus, attack or A chooses and the shield key
+or B goes back (B is the special only in a match); the mouse works in every menu. Remapping keys
 comes later. Some keyboards cannot read many keys held at once ("ghosting"); with two players on
 one keyboard, up to five keys each can be held, so a cheap keyboard may drop a key now and then.
 
 **Testing aids:** F1 shows the fighters' state, their hurtboxes and hitboxes and the blast zone,
-F2 opens the tuning panel of the first player's fighter, F5 restarts the match.
+F2 opens the tuning panel of the first player's fighter, F5 restarts the match. A help line with
+the keys shows for the first seconds of each match and with F1. F11 switches between window and
+full screen.
 
 ## Game modes
 
@@ -385,7 +418,11 @@ F2 opens the tuning panel of the first player's fighter, F5 restarts the match.
   no clock time, no reading of input outside the per-tick input, and a match state that can be
   copied and restored. Rollback netcode can then re-run ticks later.
 - **Display.** Base resolution 1920 x 1080, stretch mode `canvas_items` with aspect `expand`, the
-  Compatibility renderer (light for 2D and keeps a web export possible).
+  Compatibility renderer (light for 2D and keeps a web export possible). It has no 2D MSAA, so the
+  main scene `scenes/root.tscn` draws the game (`scenes/main.tscn`) at twice the window's pixels
+  in a SubViewport and scales it down (supersampling, `scripts/view/supersample.gd`; very large
+  windows get a smaller factor). Shapes are also drawn with antialiased outlines. A light color
+  grade and vignette lie over the picture (`scripts/view/screen_fx.gd`).
 - **Tests.** Unit tests for the simulation (movement, knockback, blast zones, lives) run headless
   on the command line with a small runner of our own, `tests/run_tests.gd`, no third-party addon.
 

@@ -18,7 +18,7 @@ the ways out of combos, effects, sounds and music made in code.
   pauses
 - The direction held picks the attack and aims the special; in the shield, a direction rolls or
   dodges and attack grabs
-- Esc pauses; F1 info and hitboxes, F2 tuning panel, F5 restart
+- Esc pauses; F1 info and hitboxes, F2 tuning panel, F5 restart, F11 full screen
 
 ## Built with
 

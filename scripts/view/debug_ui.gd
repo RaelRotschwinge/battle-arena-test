@@ -1,5 +1,6 @@
-# Aids for trying and tuning the game by hand: a help line, the info overlay (F1) and the tuning
-# panel (F2). The panel changes the fighter values at once; "Save" keeps them for the next start.
+# Aids for trying and tuning the game by hand: a help line (shown for the first seconds of each
+# match and with the info overlay), the info overlay (F1) and the tuning panel (F2). The panel
+# changes the fighter values at once; "Save" keeps them for the next start.
 extends CanvasLayer
 
 const FighterStats := preload("res://scripts/sim/fighter_stats.gd")
@@ -9,12 +10,16 @@ const TuningStore := preload("res://scripts/view/tuning_store.gd")
 const HELP := "P1: W A S D, Space attack, E special, left Shift shield     P2: arrows, Enter" \
 		+ " attack, Backspace special, right Shift shield     Esc pause     F1 info     F2 tuning" \
 		+ "     F5 restart"
+const HELP_SECONDS := 6.0  # The help line shows this long at the start of a match, then fades.
 
 var sim
 var stats  # The tuned fighter's stats (the first player's).
 var fighter_id := "test"
 
 var _info: Label
+var _help: Label
+var _help_time := 0.0
+var _help_sim  # The match the help timer belongs to: a new match shows the help again.
 var _root: Control
 var _title: Label
 var _panel: PanelContainer
@@ -31,6 +36,9 @@ func _ready() -> void:
 	add_child(root)
 
 	var help := Label.new()
+	_help = help
+	help.add_theme_color_override("font_color", Color(0.85, 0.88, 0.95))
+	help.add_theme_font_size_override("font_size", 20)
 	help.text = HELP
 	help.anchor_top = 1.0
 	help.anchor_bottom = 1.0
@@ -55,6 +63,15 @@ func _ensure_tuning() -> void:
 		_root.add_child(_panel)
 
 
+func _fade_help(delta: float) -> void:
+	if sim != _help_sim:
+		_help_sim = sim
+		_help_time = 0.0
+	_help_time += delta
+	var fade := clampf(HELP_SECONDS - _help_time, 0.0, 1.0)
+	_help.modulate.a = 1.0 if _info.visible else fade
+
+
 func toggle_info() -> bool:
 	_info.visible = not _info.visible
 	return _info.visible
@@ -67,7 +84,8 @@ func toggle_tuning() -> void:
 	_refresh_sliders()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_fade_help(delta)
 	if not _info.visible or sim == null:
 		return
 	var lines := PackedStringArray(["tick %d" % sim.tick])

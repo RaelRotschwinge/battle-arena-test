@@ -1,183 +1,297 @@
-# The shapes of the fighters: flat vector shapes drawn in code (game design, "Art style"), kept
-# simple because pixel art comes later. Squash and stretch from the fighter's speed and mode, and
-# an arm or leg that reaches out to the hitbox of an attack. Drawing only.
+# The fighters as clean vector art drawn in code (game design, "Art style"): posed every tick from
+# the fighter's state (fighter_pose.gd, fighter_strike.gd), drawn in outlined, shaded shapes
+# (fighter_art.gd), with smears behind fast limbs and the glow of the specials. Drawing only.
 extends RefCounted
 
 const Mode = preload("res://scripts/sim/fighter_state.gd").Mode
-const FighterCombat := preload("res://scripts/sim/fighter_combat.gd")
+const FighterPose := preload("res://scripts/view/fighter_pose.gd")
+const FighterStrike := preload("res://scripts/view/fighter_strike.gd")
+const FighterArt := preload("res://scripts/view/fighter_art.gd")
+const Pose = FighterPose.Pose
+
+const SHADOW := Color(0.04, 0.05, 0.08, 0.35)
 
 
 # Draws fighter f on canvas (a CanvasItem at the fighter's feet). player: the player's color,
-# tint multiplies all colors, shake moves the body.
+# tint multiplies all colors, shake moves the body. anim: the view's timers for this fighter
+# ("land", "turn", "flip", "throw", "throw_t", "tumble", "seed", "flash", "flash_color", "glow",
+# "glow_color"); the pose drawn is kept in it as "pose", so the next one blends from it.
 static func draw(canvas: CanvasItem, f, player: Color, tint: Color, shake: Vector2,
-		ticks: int) -> void:
-	var s = f.stats
-	var look: Dictionary = s.look
-	var squash := _squash(f, s)
-	# A colored shadow under the feet tells the players apart.
+		ticks: int, anim: Dictionary = {}) -> void:
+	var p := pose(f, ticks, anim)
+	var paint := _paint(f, player, tint, anim)
 	canvas.draw_set_transform(shake, 0.0, Vector2.ONE)
-	_ellipse(canvas, Vector2(0.0, -2.0), Vector2(s.width * 0.75, 7.0), Color(player, 0.7 * tint.a))
-	canvas.draw_set_transform(shake, 0.0, squash)
-	var colors: Array = look.get("colors", [])
-	var c1: Color = colors[0] if colors.size() > 0 else player
-	var c2: Color = colors[1] if colors.size() > 1 else player.lightened(0.4)
-	var c3: Color = colors[2] if colors.size() > 2 else player.darkened(0.4)
-	c1 *= tint
-	c2 *= tint
-	c3 *= tint
-	_limb(canvas, f, c2)
-	match look.get("shape", "test"):
-		"pip":
-			_pip(canvas, f, s, c1, c2, c3, ticks)
+	_ring(canvas, f, player, tint.a)
+	var frame := Transform2D(0.0, Vector2(f.facing, 1.0), 0.0, shake)
+	canvas.draw_set_transform_matrix(frame)
+	var light := Color(player.lightened(0.6), tint.a)
+	for smear in p.smears:
+		_smear(canvas, smear, light, player, false)
+	var body := FighterPose.body_transform(p)
+	if p.flip:
+		body = Transform2D(0.0, Vector2(-1.0, 1.0), 0.0, Vector2.ZERO) * body
+	canvas.draw_set_transform_matrix(frame * body)
+	match p.shape:
 		"kade":
-			_kade(canvas, f, s, c1, c2, c3)
+			FighterArt.kade(canvas, p, paint, f, ticks)
+		"pip":
+			FighterArt.pip(canvas, p, paint, f, ticks)
 		"brum":
-			_brum(canvas, f, s, c1, c2, c3)
+			FighterArt.brum(canvas, p, paint, f, ticks)
 		_:
-			_test(canvas, f, s, c1)
-	_special(canvas, f, s, c2, player)
-	if f.mode == Mode.LEDGE:  # Hands on the ledge.
-		canvas.draw_rect(Rect2(f.facing * s.width / 2.0 - 8.0, -s.height - 6.0, 16.0, 14.0), c2)
+			FighterArt.test(canvas, p, paint, f, ticks)
+	canvas.draw_set_transform_matrix(frame)
+	for smear in p.smears:
+		_smear(canvas, smear, light, player, true)
 	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-# Stretched while flying fast up or down, squashed in the take-off and landing lag.
-static func _squash(f, s) -> Vector2:
-	var y := 1.0
-	match f.mode:
-		Mode.JUMP_SQUAT:
-			y = 0.82
-		Mode.AIR, Mode.HITSTUN:
-			y = 1.0 + clampf(absf(f.velocity.y) / s.max_fall_speed * 0.12, 0.0, 0.16)
-		Mode.GROUND:
-			if f.lag > 0:
-				y = 0.88
-			elif f.running:
-				y = 0.95
-		Mode.SHIELD, Mode.DODGE:
-			y = 0.9 if f.dodge != "roll" else 0.7
-	return Vector2(1.0 / sqrt(y), y)
+# The pose of f this tick, blended from the last one shown (kept in anim).
+static func pose(f, ticks: int, anim: Dictionary) -> Pose:
+	var p := FighterPose.make(f, ticks, anim)
+	if f.attack != "" and (f.mode == Mode.GROUND or f.mode == Mode.AIR):
+		FighterStrike.apply(p, f, ticks)
+	if not anim.is_empty():  # Callers without timers (the menus) get no blending.
+		var last = anim.get("pose")
+		if last != null:
+			FighterPose.blend(p, last, p.snap)
+		anim["pose"] = p
+	FighterPose.finalize(p)
+	return p
 
 
-# During an attack an arm or leg reaches from the body to the hitbox, so it is clear who hits.
-static func _limb(canvas: CanvasItem, f, color: Color) -> void:
-	if f.attack == "" or f.attack in ["grab"] or f.attack.begins_with("special"):
+# A flat afterimage of the body as last drawn, offset from the fighter.
+static func draw_ghost(canvas: CanvasItem, f, offset: Vector2, color: Color,
+		anim: Dictionary) -> void:
+	var last = anim.get("pose")
+	if last == null:
 		return
-	var box: Rect2 = FighterCombat.data(f)["box"]
-	if not box.has_area():
-		return
-	var x: float = box.position.x if f.facing > 0 else -box.end.x
-	var target := Rect2(Vector2(x, box.position.y), box.size).get_center()
-	var root := Vector2(0.0, -f.stats.height * 0.55)
-	var reach := 0.45 if FighterCombat.in_startup(f) else 0.9
-	canvas.draw_line(root, root.lerp(target, reach), color, 14.0)
-	canvas.draw_circle(root.lerp(target, reach), 10.0, color)
+	var p: Pose = last
+	var frame := Transform2D(0.0, Vector2(f.facing, 1.0), 0.0, offset)
+	canvas.draw_set_transform_matrix(frame * FighterPose.body_transform(p))
+	FighterArt.silhouette(canvas, p, color)
+	canvas.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-# The specials show what they are: an orb growing in the hand before a Spark, feathers that flare
-# before a Swoop and streaks behind it, rings that spin around a Whirl.
-static func _special(canvas: CanvasItem, f, s, light: Color, player: Color) -> void:
-	if not f.attack.begins_with("special"):
-		return
-	var a: Dictionary = FighterCombat.data(f)
-	var t: int = f.attack_ticks
-	var middle := Vector2(0.0, -s.height * 0.5)
-	if a.has("shot"):
-		if t <= a["startup"]:
-			var offset: Vector2 = a["shot"]["offset"]
-			var radius: float = a["shot"]["size"].x / 2.0 * float(t) / a["startup"]
-			canvas.draw_circle(Vector2(offset.x * f.facing, offset.y), radius, player.lightened(0.5))
-			canvas.draw_circle(Vector2(offset.x * f.facing, offset.y), radius * 0.5, Color.WHITE)
-	elif a.has("multi"):
-		if t > a["startup"] and t <= a["startup"] + a["active"]:
-			for n in 3:
-				var turn := t * 0.7 + TAU * n / 3.0
-				canvas.draw_arc(middle, s.width * 1.05, turn, turn + 1.4, 12,
-						Color(light, 0.8), 8.0)
-	elif a.has("move"):
-		if t <= a["startup"]:
-			for n in 5:
-				var turn := -PI / 2.0 + (n - 2) * 0.5
-				var from: Vector2 = middle + Vector2(cos(turn), sin(turn)) * s.width * 0.5
-				canvas.draw_line(from, from + Vector2(cos(turn), sin(turn)) * (8.0 + t * 3.0),
-						light, 5.0)
-		elif t <= a["startup"] + a["active"]:
-			var back: Vector2 = -f.special_aim
-			for n in 3:
-				var side: Vector2 = back.orthogonal() * (n - 1) * s.width * 0.3
-				canvas.draw_line(middle + side, middle + side + back * s.width * 1.6,
-						Color(player.lightened(0.4), 0.6), 6.0)
+static func _paint(f, player: Color, tint: Color, anim: Dictionary) -> FighterArt.Paint:
+	var paint := FighterArt.Paint.new()
+	var colors: Array = f.stats.look.get("colors", [])
+	var flash: float = anim.get("flash", 0.0)
+	var flash_color: Color = anim.get("flash_color", Color.WHITE)
+	var tones := []
+	for n in 3:
+		var c: Color = colors[n] if colors.size() > n else [player, player.lightened(0.4),
+				player.darkened(0.4)][n]
+		tones.append(_tone(c, tint, flash, flash_color))
+	paint.body = tones[0]
+	paint.second = tones[1]
+	paint.third = tones[2]
+	paint.scarf = _tone(FighterArt.SCARF, tint, flash, flash_color)
+	var glow: float = anim.get("glow", 0.0)
+	paint.line = FighterArt.INK.lerp(anim.get("glow_color", Color.WHITE), glow)
+	paint.line.a = tint.a
+	paint.ink.a = tint.a
+	paint.white = Color(1, 1, 1, tint.a)
+	return paint
 
 
-static func _test(canvas: CanvasItem, f, s, body: Color) -> void:
-	var w: float = s.width
-	var h: float = s.height
-	canvas.draw_rect(Rect2(-w / 2.0, -h, w, h), body)
-	_eye(canvas, f, Vector2(f.facing * w * 0.22, -h * 0.75), 8.0, body.a)
+static func _tone(c: Color, tint: Color, flash: float, flash_color: Color) -> Color:
+	var toned := Color(c.r * tint.r, c.g * tint.g, c.b * tint.b, tint.a)
+	return toned.lerp(Color(flash_color, tint.a), flash)
 
 
-# Kade: an all-rounder with a round head and a scarf that trails behind.
-static func _kade(canvas: CanvasItem, f, s, body: Color, skin: Color, scarf: Color) -> void:
-	var w: float = s.width
-	var h: float = s.height
-	var back: int = -f.facing
-	canvas.draw_rect(Rect2(-w * 0.3, -h * 0.28, w * 0.22, h * 0.28), scarf)  # Legs.
-	canvas.draw_rect(Rect2(w * 0.08, -h * 0.28, w * 0.22, h * 0.28), scarf)
-	canvas.draw_rect(Rect2(-w * 0.42, -h * 0.66, w * 0.84, h * 0.42), body)
-	var flutter: float = clampf(f.velocity.x * -f.facing * 1.5, -10.0, 24.0)
-	canvas.draw_colored_polygon(PackedVector2Array([Vector2(0.0, -h * 0.68),
-			Vector2(back * (w * 0.55 + flutter), -h * 0.62 - flutter * 0.3),
-			Vector2(back * (w * 0.5 + flutter), -h * 0.54), Vector2(0.0, -h * 0.6)]), scarf)
-	canvas.draw_circle(Vector2(0.0, -h * 0.82), w * 0.33, skin)
-	_eye(canvas, f, Vector2(f.facing * w * 0.15, -h * 0.84), 6.0, body.a)
+# The player's ring under the feet over a soft shadow: who is who at a glance. Off the ground it
+# shrinks and fades, a marker rather than a shadow.
+static func _ring(canvas: CanvasItem, f, player: Color, alpha: float) -> void:
+	var size := 1.0
+	if f.mode in [Mode.AIR, Mode.LEDGE, Mode.CLIMB, Mode.HELD, Mode.HITSTUN] 			or f.mode == Mode.DODGE and f.dodge == "air":
+		size = 0.6
+		alpha *= 0.5
+	var radius := Vector2(f.stats.width * 0.62, 9.0) * size
+	canvas.draw_colored_polygon(FighterArt.ellipse(Vector2(0.0, -1.0), radius, 0.0, 24),
+			Color(SHADOW, SHADOW.a * alpha))
+	var ring := FighterArt.ellipse(Vector2(0.0, -1.0), radius, 0.0, 24)
+	ring.append(ring[0])
+	canvas.draw_polyline(ring, Color(player, 0.9 * alpha), 4.0 * size, true)
 
 
-# Pip: small, round and quick, with a pointed beak and wings that flap in the air.
-static func _pip(canvas: CanvasItem, f, s, body: Color, belly: Color, beak: Color,
-		ticks: int) -> void:
-	var w: float = s.width
-	var h: float = s.height
-	var middle := Vector2(0.0, -h * 0.45)
-	var flap := 0.0
-	if f.mode == Mode.AIR:
-		flap = sin(ticks * 0.6) * 0.6 if f.velocity.y < 0.0 else 0.3
+# One smear or special effect (see fighter_strike.gd), in the fighter's own space. front: the
+# pass over the body (the orb, the burst, the front of the Whirl) or the one behind it.
+static func _smear(canvas: CanvasItem, smear: Array, light: Color, player: Color,
+		front: bool) -> void:
+	match smear[0]:
+		"arc":
+			if not front:
+				_crescent(canvas, smear[1], smear[2], smear[3], smear[4], smear[5], light,
+						smear[6])
+		"ring":
+			if not front:
+				var head: float = smear[3]
+				for n in 2:
+					_crescent(canvas, smear[1], smear[2], head + n * PI + smear[4],
+							head + n * PI, smear[5], light, smear[6])
+		"thrust":
+			if not front:
+				_thrust(canvas, smear[1], smear[2], smear[3], light, smear[4])
+		"dive":
+			if not front:
+				_dive(canvas, smear[1], smear[2], light, smear[3])
+		"streak":
+			if not front:
+				_streak(canvas, smear[1], smear[2], smear[3], light)
+		"flare":
+			if not front:
+				_flare(canvas, smear[1], smear[2], smear[3], light)
+		"whirl":
+			_whirl(canvas, smear[1], smear[2], smear[3], smear[4], light, front)
+		"orb":
+			if front:
+				_orb(canvas, smear[1], smear[2], smear[3], player)
+		"burst":
+			if front:
+				_burst(canvas, smear[1], smear[2], smear[3], player)
+		"glint":
+			if front:
+				_glint(canvas, smear[1], smear[2])
+
+
+# A curved band from angle start (its thin, clear tail) to angle now (its full head).
+static func _crescent(canvas: CanvasItem, pivot: Vector2, radius: float, start: float,
+		now: float, width: float, color: Color, alpha: float) -> void:
+	var count := 12
+	var last_out := Vector2.ZERO
+	var last_in := Vector2.ZERO
+	var last_color := Color(color, 0.0)
+	var edge := PackedVector2Array()
+	var edge_colors := PackedColorArray()
+	for n in count + 1:
+		var t := float(n) / count
+		var a := lerpf(start, now, t)
+		var thick := width * (0.15 + 0.85 * t)
+		var dir := Vector2.from_angle(a)
+		var outer := pivot + dir * (radius + thick * 0.5)
+		var inner := pivot + dir * (radius - thick * 0.5)
+		var c := Color(color, color.a * alpha * t * 0.8)
+		if n > 0:
+			canvas.draw_primitive(PackedVector2Array([last_out, outer, inner, last_in]),
+					PackedColorArray([last_color, c, c, last_color]), PackedVector2Array())
+		edge.append(outer)
+		edge_colors.append(Color(1.0, 1.0, 1.0, color.a * alpha * t))
+		last_out = outer
+		last_in = inner
+		last_color = c
+	canvas.draw_polyline_colors(edge, edge_colors, 2.5, true)
+
+
+# Speed lines behind a punch or kick: a fading wedge and two thin lines.
+static func _thrust(canvas: CanvasItem, from: Vector2, to: Vector2, width: float, color: Color,
+		alpha: float) -> void:
+	var u := (to - from).normalized()
+	var n := u.orthogonal()
+	var clear := Color(color, 0.0)
+	var c := Color(color, color.a * alpha * 0.7)
+	canvas.draw_primitive(PackedVector2Array([from, to + n * width * 0.5, to - n * width * 0.5]),
+			PackedColorArray([clear, c, c]), PackedVector2Array())
 	for side in [-1.0, 1.0]:
-		var root := middle + Vector2(side * w * 0.42, -h * 0.05)
-		var wing_tip := root + Vector2(side * w * 0.35, -h * 0.1).rotated(side * flap)
-		canvas.draw_line(root, wing_tip, belly, 12.0)
-	canvas.draw_circle(middle, w * 0.5, body)
-	canvas.draw_circle(middle + Vector2(f.facing * w * 0.08, h * 0.1), w * 0.3, belly)
-	canvas.draw_circle(Vector2(0.0, -h * 0.82), w * 0.3, body)
-	var tip := Vector2(f.facing * w * 0.62, -h * 0.8)
-	canvas.draw_colored_polygon(PackedVector2Array([Vector2(f.facing * w * 0.2, -h * 0.88),
-			tip, Vector2(f.facing * w * 0.2, -h * 0.74)]), beak)
-	_eye(canvas, f, Vector2(f.facing * w * 0.1, -h * 0.86), 5.0, body.a)
+		var start: Vector2 = from - u * 10.0 + n * width * side
+		var end: Vector2 = to - u * 14.0 + n * width * side * 0.8
+		canvas.draw_polyline_colors(PackedVector2Array([start, end]), PackedColorArray([clear,
+				Color(1, 1, 1, color.a * alpha * 0.8)]), 2.5, true)
 
 
-# Brum: wide and heavy, a square head on broad shoulders and two big fists.
-static func _brum(canvas: CanvasItem, f, s, body: Color, stone: Color, gold: Color) -> void:
-	var w: float = s.width
-	var h: float = s.height
-	canvas.draw_rect(Rect2(-w * 0.36, -h * 0.25, w * 0.28, h * 0.25), stone)  # Legs.
-	canvas.draw_rect(Rect2(w * 0.08, -h * 0.25, w * 0.28, h * 0.25), stone)
-	canvas.draw_colored_polygon(PackedVector2Array([Vector2(-w * 0.36, -h * 0.22),
-			Vector2(-w * 0.52, -h * 0.72), Vector2(w * 0.52, -h * 0.72),
-			Vector2(w * 0.36, -h * 0.22)]), body)
-	canvas.draw_rect(Rect2(-w * 0.22, -h * 0.98, w * 0.44, h * 0.28), stone)
-	canvas.draw_rect(Rect2(-w * 0.22, -h * 0.76, w * 0.44, h * 0.05), gold)
-	for side in [-1.0, 1.0]:
-		canvas.draw_circle(Vector2(side * w * 0.55, -h * 0.4), w * 0.17, gold)
-	_eye(canvas, f, Vector2(f.facing * w * 0.1, -h * 0.87), 6.0, body.a)
+# Speed lines above a ground pound as it drops.
+static func _dive(canvas: CanvasItem, top: Vector2, half: float, color: Color, k: float) -> void:
+	for n in 4:
+		var x := lerpf(-half, half, n / 3.0)
+		var length := 30.0 + 26.0 * k + (n % 2) * 14.0
+		var start := top + Vector2(x, -8.0 - length)
+		canvas.draw_polyline_colors(PackedVector2Array([start, top + Vector2(x * 0.8, -6.0)]),
+				PackedColorArray([Color(color, 0.0), Color(color, color.a * 0.8)]), 3.0, true)
 
 
-static func _eye(canvas: CanvasItem, f, at: Vector2, size: float, alpha: float) -> void:
-	canvas.draw_circle(at, size, Color(1, 1, 1, alpha))
-	canvas.draw_circle(at + Vector2(f.facing * size * 0.4, 0.0), size * 0.5, Color(0, 0, 0, alpha))
+# The Swoop's streak: lines trailing far behind against the way aimed.
+static func _streak(canvas: CanvasItem, middle: Vector2, aim: Vector2, size: float,
+		color: Color) -> void:
+	var back := -aim.normalized()
+	var n := back.orthogonal()
+	var clear := Color(color, 0.0)
+	canvas.draw_primitive(PackedVector2Array([middle + n * size * 0.42,
+			middle + back * size * 2.6, middle - n * size * 0.42]),
+			PackedColorArray([Color(color, color.a * 0.45), clear, Color(color, color.a * 0.45)]),
+			PackedVector2Array())
+	for k in [-0.35, 0.0, 0.35]:
+		var start: Vector2 = middle + n * size * k + back * size * 0.3
+		canvas.draw_polyline_colors(PackedVector2Array([start, start + back * size * (2.2 -
+				absf(k) * 2.0)]), PackedColorArray([Color(1, 1, 1, color.a * 0.85), clear]), 3.0,
+				true)
 
 
-static func _ellipse(canvas: CanvasItem, at: Vector2, radius: Vector2, color: Color) -> void:
+# Feathers flaring out before the Swoop.
+static func _flare(canvas: CanvasItem, middle: Vector2, radius: float, k: float,
+		color: Color) -> void:
+	for n in 5:
+		var a := -PI / 2.0 + (n - 2) * 0.5
+		var dir := Vector2.from_angle(a)
+		var from := middle + dir * radius * (1.05 + 0.2 * k)
+		canvas.draw_line(from, from + dir * (6.0 + 16.0 * k), Color(color, color.a * 0.9), 4.0,
+				true)
+
+
+# The Whirl's motion arcs: flat rings round the body at fist height and lower, turning with the
+# spin; the near half is drawn over the body, the far half behind it.
+static func _whirl(canvas: CanvasItem, middle: Vector2, radius: float, spin: float, h: float,
+		color: Color, front: bool) -> void:
+	for ring in 2:
+		var center := middle + Vector2(0.0, ring * h * 0.28)
+		var size := Vector2(radius * (1.0 - ring * 0.25), radius * 0.26)
+		for arc in 2:
+			var head := spin + arc * PI
+			var points := PackedVector2Array()
+			var colors := PackedColorArray()
+			for n in 13:
+				var a := head - 2.0 * (1.0 - n / 12.0)
+				if (sin(a) >= 0.0) != front:
+					continue
+				points.append(center + Vector2(cos(a) * size.x, sin(a) * size.y))
+				colors.append(Color(color, color.a * 0.85 * n / 12.0))
+			if points.size() > 1:
+				canvas.draw_polyline_colors(points, colors, 7.0 - ring * 2.0, true)
+
+
+# The Spark growing in the hand: a soft glow, a bright core and motes circling it.
+static func _orb(canvas: CanvasItem, at: Vector2, radius: float, t: int, player: Color) -> void:
+	if radius < 1.0:
+		return
+	var pulse := 1.0 + 0.1 * sin(t * 1.3)
+	canvas.draw_circle(at, radius * 1.7 * pulse, Color(player.lightened(0.2), 0.25), true, -1.0,
+			true)
+	canvas.draw_circle(at, radius, player.lightened(0.45), true, -1.0, true)
+	canvas.draw_circle(at, radius * 0.55, Color(1.0, 1.0, 0.95), true, -1.0, true)
+	for n in 3:
+		var a := t * 0.55 + TAU * n / 3.0
+		canvas.draw_circle(at + Vector2.from_angle(a) * radius * 1.45, 2.5,
+				Color(1, 1, 1, 0.9), true, -1.0, true)
+
+
+# A small four-point sparkle on the limb about to strike: the wind-up cue.
+static func _glint(canvas: CanvasItem, at: Vector2, k: float) -> void:
+	var size := 4.0 + 9.0 * k
 	var points := PackedVector2Array()
-	for n in 20:
-		var turn := TAU * n / 20.0
-		points.append(at + Vector2(cos(turn) * radius.x, sin(turn) * radius.y))
-	canvas.draw_colored_polygon(points, color)
+	for n in 8:
+		points.append(at + Vector2.from_angle(TAU * n / 8.0 - PI / 2.0)
+				* (size if n % 2 == 0 else size * 0.22))
+	canvas.draw_colored_polygon(points, Color(1.0, 1.0, 0.9, 0.95))
+	canvas.draw_circle(at, size * 0.25, Color.WHITE, true, -1.0, true)
+
+
+# A ring and rays where the Spark leaves the hand.
+static func _burst(canvas: CanvasItem, at: Vector2, radius: float, age: int,
+		player: Color) -> void:
+	var k := age / 8.0
+	var fade := 1.0 - k
+	canvas.draw_arc(at, radius * (0.6 + k * 0.9), 0.0, TAU, 24, Color(player.lightened(0.6),
+			fade), 4.0 * fade + 1.0, true)
+	for n in 6:
+		var dir := Vector2.from_angle(TAU * n / 6.0 + 0.3)
+		canvas.draw_line(at + dir * radius * (0.7 + k), at + dir * radius * (1.0 + k * 1.4),
+				Color(1, 1, 1, fade), 3.0, true)

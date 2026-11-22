@@ -11,8 +11,10 @@ config_version=5
 [application]
 
 config/name="Battle Arena Test"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/root.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.086, 0.102, 0.141, 1)
 
 [display]
 
