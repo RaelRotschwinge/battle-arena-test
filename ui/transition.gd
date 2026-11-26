@@ -4,6 +4,7 @@
 extends CanvasLayer
 
 const UiDraw := preload("res://ui/ui_draw.gd")
+const Sounds := preload("res://scripts/view/sounds.gd")
 
 const COVER_TIME := 0.1  # Short, so a quick player is not held up.
 const REVEAL_TIME := 0.24
@@ -32,6 +33,7 @@ func go(then: Callable) -> void:
 	if _phase != "cover":
 		_phase = "cover"
 		_t = 0.0
+		Sounds.cue("wipe")
 	covering = true
 
 

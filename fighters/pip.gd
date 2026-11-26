@@ -42,7 +42,7 @@ const MOVES := {
 			"damage": 6.0, "base": 6.0, "growth": 8.0, "angle": 35.0, "aim": "eight",
 			"stop_on_contact": 6, "landing_lag": 12,
 			"move": {"speed": 18.0, "stall": true, "keep": 0.3, "stop_at_wall": true, "fly": true}},
-	"special_air": {"startup": 6, "active": 12, "recovery": 20, "box": Rect2(-40, -92, 80, 100),
+	"special_air": {"startup": 6, "active": 12, "recovery": 22, "box": Rect2(-40, -92, 80, 100),
 			"damage": 6.0, "base": 6.0, "growth": 8.0, "angle": 35.0, "aim": "eight",
 			"stop_on_contact": 6, "landing_lag": 12, "once_per_air": true,
 			"move": {"speed": 18.0, "stall": true, "keep": 0.3, "stop_at_wall": true, "fly": true}},
@@ -58,7 +58,7 @@ static func apply(stats) -> void:
 	stats.look = {"shape": "pip", "colors": [Color("6ec6ff"), Color("f6e7c1"), Color("ff9f43")]}
 	stats.width = 50.0
 	stats.height = 84.0
-	stats.weight = 98.0
+	stats.weight = 95.0
 	stats.walk_speed = 7.0
 	stats.run_speed = 12.5
 	stats.ground_accel = 1.5

@@ -136,7 +136,7 @@ func test_swoop_dashes_the_way_held_and_once_in_the_air() -> void:
 	assert_true(pip.position.y < start_y - 180.0, "up in the air, got %.0f"
 			% (start_y - pip.position.y))
 	assert_true(pip.special_used, "used in this time in the air")
-	for t in 20:
+	while pip.attack != "" and pip.mode == Mode.AIR:  # The Swoop's recovery ends in the air.
 		sim.step([_input([])])
 	sim.step([_input(["special"])])
 	assert_eq(pip.attack, "", "not a second time before landing")

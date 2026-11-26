@@ -70,3 +70,23 @@ func test_an_unplugged_pad_leaves_the_slot_open() -> void:
 	s.press("pad1", DEVICES)
 	s.forget_missing(["kb1", "kb2", "pad0"])
 	assert_true(s.joined(0) and not s.locked(0) and s.device(0) == "", "open, without a device")
+
+
+func test_the_last_players_return_to_their_own_panels() -> void:
+	var s := DeviceSlots.new()
+	assert_eq(s.place(2, "kb2", DEVICES), 2, "back into panel 3")
+	assert_true(s.locked(2) and not s.joined(0), "locked there, panel 1 stays empty")
+	assert_eq(s.place(2, "pad0", DEVICES), 0, "a taken panel falls back to the first free one")
+
+
+func test_a_slot_opened_by_mistake_stays_with_its_old_device() -> void:
+	var s := DeviceSlots.new()
+	s.press("kb1", DEVICES)
+	s.cycle(0, 1, DEVICES)  # Switched by mistake: now kb2 is chosen, open.
+	assert_eq(s.steering("kb1"), 0, "kb1 still steers player 1")
+	assert_eq(s.press("kb1", DEVICES), 0, "attack on kb1 locks it again")
+	assert_true(s.locked(0) and s.device(0) == "kb1", "back on kb1")
+	s.cycle(0, 1, DEVICES)
+	s.press("kb2", DEVICES)  # kb2 is chosen by player 1: this locks player 1 to kb2.
+	assert_eq(s.owner_of("kb2"), 0, "the new device locked")
+	assert_eq(s.steering("kb1"), -1, "the old one is free again")

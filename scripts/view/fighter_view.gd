@@ -24,6 +24,7 @@ const TAG_SIZE := 26
 var fighter
 var color := Color.WHITE  # The player's color: label, ring and shield.
 var label := ""
+var tag_lift := 0.0  # Raises the name tag when it would cover another fighter's (match_view).
 var show_boxes := false
 var effects  # The hit effects node: dust where the fighter lands, jumps and turns.
 var _respawns := 0
@@ -322,7 +323,7 @@ func _tag(h: float) -> void:
 		return
 	var font := ThemeDB.fallback_font
 	var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, TAG_SIZE).x
-	var bottom := -h - 30.0
+	var bottom := -h - 30.0 - tag_lift
 	var pill := FighterArt.rounded(bottom - 34.0, bottom, width / 2.0 + 8.0, width / 2.0 + 8.0,
 			10.0)
 	draw_colored_polygon(pill, TAG_BACK)

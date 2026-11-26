@@ -25,7 +25,9 @@ const PAD_JUMP := [JOY_BUTTON_A, JOY_BUTTON_Y]
 const PAD_ATTACK := [JOY_BUTTON_X]
 const PAD_SPECIAL := [JOY_BUTTON_B]
 const PAD_SHIELD := [JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER]
-const MENU_ACTIONS := ["up", "down", "left", "right", "confirm", "back", "start"]
+# back: the shield key, B or Esc; leave: only the device's own shield key or B (on the fighter
+# select, where two keyboard players share one Esc key).
+const MENU_ACTIONS := ["up", "down", "left", "right", "confirm", "back", "leave", "start"]
 const REPEAT_DELAY := 20  # Ticks a held direction waits before it repeats in menus.
 const REPEAT_EVERY := 6
 
@@ -151,7 +153,7 @@ static func swallow() -> void:
 static func _menu_state(device: String) -> Dictionary:
 	var input := read(device)
 	var state := {"up": input.up, "down": input.down, "left": input.left, "right": input.right,
-			"confirm": input.attack, "back": false, "start": false}
+			"confirm": input.attack, "back": false, "leave": input.shield, "start": false}
 	if KEYBOARD.has(device):
 		state["back"] = input.shield or Input.is_physical_key_pressed(KEY_ESCAPE)
 		state["start"] = Input.is_physical_key_pressed(KEY_ESCAPE)
@@ -160,6 +162,7 @@ static func _menu_state(device: String) -> Dictionary:
 		state["confirm"] = Input.is_joy_button_pressed(pad, JOY_BUTTON_A) \
 				or Input.is_joy_button_pressed(pad, JOY_BUTTON_X)
 		state["back"] = Input.is_joy_button_pressed(pad, JOY_BUTTON_B)
+		state["leave"] = state["back"]
 		state["start"] = Input.is_joy_button_pressed(pad, JOY_BUTTON_START)
 	return state
 

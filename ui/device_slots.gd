@@ -2,12 +2,16 @@
 # player slots chooses a device (a keyboard layout or a gamepad) and locks it in. A slot may only
 # choose devices that no slot before it has locked; when a slot locks a device a later slot holds,
 # that later slot moves on to its next free device and is open again. Only a locked device steers
-# its slot; the mouse works every slot. Pure logic: the connected devices are passed in.
+# its slot; the mouse works every slot. A slot that was opened again (its device changed) stays
+# steered by the device that locked it last, until that device goes to another slot, so a player
+# who switches by mistake can switch back or lock again. Pure logic: the devices are passed in.
 extends RefCounted
 
 const SLOTS := 4
 
-var slots := []  # Per slot: {} empty, or {"device": String ("" for none free), "locked": bool}.
+# Per slot: {} empty, or {"device": String ("" for none free), "locked": bool, "steer": the device
+# that locked it last, "" for none}.
+var slots := []
 
 
 func _init() -> void:
@@ -40,11 +44,22 @@ func choices(i: int, devices: Array) -> Array:
 	return free
 
 
-# The slot this device steers (the one that locked it), -1 for none.
+# The slot this device locked, -1 for none.
 func owner_of(d: String) -> int:
 	for i in SLOTS:
 		if locked(i) and device(i) == d:
 			return i
+	return -1
+
+
+# The slot this device steers: the one it locked, else an open slot it locked last, -1 for none.
+func steering(d: String) -> int:
+	var i := owner_of(d)
+	if i >= 0:
+		return i
+	for j in SLOTS:
+		if joined(j) and not locked(j) and slots[j].get("steer", "") == d:
+			return j
 	return -1
 
 
@@ -55,12 +70,27 @@ func press(d: String, devices: Array) -> int:
 		if joined(i) and not locked(i) and device(i) == d and choices(i, devices).has(d):
 			lock(i, devices)
 			return i
+	var back := steering(d)  # A slot opened by mistake: its old device locks it again.
+	if back >= 0 and not locked(back) and choices(back, devices).has(d):
+		slots[back]["device"] = d
+		lock(back, devices)
+		return back
 	for i in SLOTS:
 		if not joined(i) and choices(i, devices).has(d):
 			slots[i] = {"device": d, "locked": false}
 			lock(i, devices)
 			return i
 	return -1
+
+
+# Puts device d back into slot i, locked (the last match's players return to their panels); a
+# taken or missing slot falls back to press(). Returns the slot, -1 when none.
+func place(i: int, d: String, devices: Array) -> int:
+	if i < 0 or i >= SLOTS or joined(i) or not choices(i, devices).has(d) or owner_of(d) >= 0:
+		return press(d, devices)
+	slots[i] = {"device": d, "locked": false}
+	lock(i, devices)
+	return i
 
 
 # Joins slot i by mouse: open, with the first device it may choose that no other slot holds.
@@ -85,7 +115,7 @@ func cycle(i: int, step: int, devices: Array) -> void:
 		return
 	var at := all.find(device(i))
 	slots[i] = {"device": all[posmod(at + step, all.size())] if at >= 0 else all[0],
-			"locked": false}
+			"locked": false, "steer": slots[i].get("steer", "")}
 
 
 # Locks slot i's device; a later slot holding the same device moves on and is open again.
@@ -93,10 +123,15 @@ func lock(i: int, devices: Array) -> bool:
 	if not joined(i) or device(i) == "" or not choices(i, devices).has(device(i)):
 		return false
 	slots[i]["locked"] = true
+	slots[i]["steer"] = device(i)
+	for k in SLOTS:  # The device steers only this slot now.
+		if k != i and joined(k) and slots[k].get("steer", "") == device(i):
+			slots[k]["steer"] = ""
 	for j in range(i + 1, SLOTS):
 		if joined(j) and device(j) == device(i):
 			var rest := choices(j, devices)
-			slots[j] = {"device": rest[0] if not rest.is_empty() else "", "locked": false}
+			slots[j] = {"device": rest[0] if not rest.is_empty() else "", "locked": false,
+					"steer": ""}
 	return true
 
 

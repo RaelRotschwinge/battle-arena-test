@@ -6,9 +6,11 @@ lives. The last fighter standing wins.
 
 **Status:** milestone 4.5, more content: three fighters (Kade, Pip, Brum), each with a special
 move of its own, seven arenas (Pebble, Terraces, Ferry, Flatiron, Cistern, Windlass, Kettle) and
-a training arena, a fighter select with stat sheets and an arena select with live previews, 2 to
-4 players on keyboard and gamepads, computer opponents in three levels, shield, dodges, grabs and
-the ways out of combos, effects, sounds and music made in code.
+a training arena, a fighter select with stat sheets and a device choice per player, an arena
+select with live previews, a training mode, options (full screen, volumes, screen shake), mouse
+control in every menu, 2 to 4 players on keyboard and gamepads, computer opponents in three
+levels, shield, dodges, grabs and the ways out of combos. Everything is drawn and synthesized in
+code, with upbeat electronic music that speeds up as the damage rises.
 
 ## Controls
 

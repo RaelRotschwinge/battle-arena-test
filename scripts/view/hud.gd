@@ -249,6 +249,8 @@ class Card extends Control:
 	func _draw_stocks() -> void:
 		var shown: int = fighter.stocks
 		var at := Vector2(118.0 + STOCK_RADIUS, 88.0)
+		if shown >= 99:  # Endless lives (training): no tokens.
+			return
 		if shown > 5:  # Many lives: one token and the count.
 			_token(at, 1.0, 1.0)
 			draw_string(font, at + Vector2(16.0, 8.0), "x%d" % shown, HORIZONTAL_ALIGNMENT_LEFT,

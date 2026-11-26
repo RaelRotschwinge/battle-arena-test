@@ -158,8 +158,8 @@ screen shows each fighter's special and the player's own key for it.
 | Fighter | Special | What it does | Limits and counterplay |
 |---|---|---|---|
 | Kade | Spark | After 10 ticks throws an orb (r 18 px) that flies 9 px per tick for 50 ticks (about 450 px): 5 %, a light launch. A fresh up or down aims it 45 degrees (down in the air only). Recovery 18 ticks on the ground, 14 in the air; no help to recover | One orb at a time: the key does nothing while it flies. It vanishes on a hit, a shield, a wall, another fighter's shot, or an attack that meets it. Slower than a run, so it can be jumped, dodged or outrun. A parry sends it back as the parrier's own |
-| Pip | Swoop | Stops for 6 ticks (feathers flare), then dashes 12 ticks at 18 px per tick (216 px) the way held, in eight directions (else forward): 6 %, launches forward and up. Brings Pip home | Once per time in the air (back on landing, a ledge, a wall jump, a hit). It stops at a fighter, a shield or a wall. Recovery 28 ticks on the ground, 20 in the air (6 fewer on a hit); landing in it, 12 ticks. Pip can be hit all the way |
-| Brum | Whirl | After 6 ticks spins for 18 ticks with fists on both sides: three light hits (3 % each, they keep the target in the spin), then one that launches (6 %). On the ground Brum creeps 3 px per tick; in the air the spin carries him 7 px per tick sideways and 6 px per tick up (about 126 px across, 108 up) | Once per time in the air. Recovery 34 ticks on the ground (a whiff is a free punish), 20 in the air, 14 when landing in it. A shield and a grab beat it |
+| Pip | Swoop | Stops for 6 ticks (feathers flare), then dashes 12 ticks at 18 px per tick (216 px) the way held, in eight directions (else forward): 6 %, launches forward and up. Brings Pip home | Once per time in the air (back on landing, a ledge, a wall jump, a hit). It stops at a fighter, a shield or a wall. Recovery 28 ticks on the ground, 22 in the air (6 fewer on a hit); landing in it, 12 ticks. Pip can be hit all the way |
+| Brum | Whirl | After 6 ticks spins for 18 ticks with fists on both sides: three light hits (3 % each, they keep the target in the spin), then one that launches (6 %). On the ground Brum creeps 3 px per tick; in the air the spin carries him 7 px per tick sideways and 6 px per tick up (about 126 px across, 108 up) | Once per time in the air. Recovery 30 ticks on the ground (a whiff is a free punish), 20 in the air, 14 when landing in it. A shield and a grab beat it |
 
 Shots are part of the match state, like the fighters, so a match with shots in flight still
 replays the same. The combo search (section "Ways out of combos") uses the specials too.
@@ -232,17 +232,30 @@ plays out the same way (`scripts/sim/cpu_player.gd`).
 
 ## Menus
 
-- **Main menu:** Play, Controls (a page of all keys and moves), Quit.
+- **Main menu:** Play, Training, Controls (a page of all keys and moves), Options, Quit.
+- **Options** (`ui/options_page.gd`, `scripts/view/settings.gd`): full screen, music volume,
+  effects volume (0 to 100 % in steps of 10, on the audio buses "Music" and "SFX") and screen
+  shake (off, low, normal). Saved at once in `user://settings.cfg`, loaded at every start.
+- **Training** (`ui/training_setup.gd`, `scripts/view/training_view.gd`): one player against a
+  dummy. The setup picks the player's fighter, the dummy's fighter and what the dummy does
+  (stand, walk, jump, shield, or a computer player easy to hard) and the arena (the training
+  arena by default); the device that starts it plays. No lives are lost and no results come; a
+  panel counts each combo (hits while the dummy never got free) and its damage; R, F5 or the
+  pause menu resets both fighters to their start at 0 %; the pause menu also changes the
+  dummy's behavior and leaves the training.
 - **Choose your fighters:** four panels side by side, one per player (P1 to P4). Each player
   chooses an input device (a keyboard layout or a gamepad) and locks it in
   (`ui/device_slots.gd`): a player may only choose devices that no player before him has locked;
   when a player locks a device a later player holds, the later one moves on to his next free
-  device and has to lock again. Only a locked device steers its panel. Pressing attack on a free
+  device and has to lock again. Only a locked device steers its panel; a panel whose player
+  changed its device (opened it again) stays steered by the device that locked it last, so a
+  switch by mistake is undone with attack on the old device. Pressing attack on a free
   device joins the next empty panel with it, locked (the quick way); pressing attack on a device
   a panel has chosen locks that panel. In a panel, up and down switch between the fighter and the
   device row, left and right change them (changing the device opens the panel again). Fighters:
   Kade, Pip, Brum or Random (rolled anew at every match start); attack is ready (once the device
-  is locked), the shield key or B steps back. Several players may pick the same fighter. Each panel shows the fighter as it
+  is locked), the player's own shield key or B steps back (Esc does not, since two keyboard
+  players share it). Each player keeps the number and color of his panel in the match. Several players may pick the same fighter. Each panel shows the fighter as it
   looks in the match on a ring in the player's color, its name, role and difficulty (one to three
   stars), its stat sheet (section "Fighters"), one line about it, and its special: name, the
   player's own key and what it does. Computer players fill the next empty panels with the
@@ -274,7 +287,7 @@ moves; `fighters/roster.gd` lists them. The plain test fighter stays for the tes
 | Role, difficulty | All-rounder, 1 star | Rushdown, 3 stars | Heavy hitter, 2 stars |
 | Look | Round head, green body, a scarf trailing behind | Round blue body, pointed beak, flapping wings | Wide red-brown body, square head, big gold fists |
 | Body | 60 x 100 | 50 x 84 | 74 x 116 |
-| Weight | 96 | 98 | 110 |
+| Weight | 96 | 95 | 110 |
 | Run | 10 | 12.5 | 8 |
 | Jumps in the air | 1 | 2 | 1 |
 | Up-air lift | 13 px/tick, 10 ticks | 11 px/tick, 8 ticks | 10 px/tick, 8 ticks |
@@ -292,10 +305,11 @@ rule (`fighters/stat_sheet.gd`), so the sheet follows every change and a new fig
 | Recovery | 1, plus 1 per jump in the air, 1 for a lift of 130 px or more, 1 for an air speed of 6 or more, 1 for an air special that moves the fighter | 4 | 5 | 3 |
 
 Balance with the specials (hard computer against hard computer, every pair 8 times on the test
-arena, Terraces, Ferry, Flatiron, Cistern and Kettle, 96 matches each fighter): Kade wins 49, Pip
-56, Brum 39; knockouts at about 135 to 165 % (Brum the latest). One against one lasts 2.5 to 4
-minutes, four hard computer players 2 to 3.5 minutes. Kade is strongest on Flatiron and Ferry,
-Pip on Terraces and Cistern, Brum on Kettle. Computer players are only a guide; people playing
+arena, Terraces, Ferry, Flatiron, Cistern and Kettle, 96 matches each fighter), after the tuning
+of 2026-11-26 (Brum's attacks 12 % stronger, his side attack and forward air a tick faster, a
+shorter Whirl on the ground; Pip lighter, a longer air Swoop): Kade wins 46, Pip 50, Brum 48;
+knockouts at about 135 to 165 % (Brum the latest). One against one lasts about 3 minutes, four
+hard computer players 2 to 3.5 minutes. Computer players are only a guide; people playing
 decide.
 
 ## Arenas
@@ -342,6 +356,22 @@ dark outlines, a light and a dark tone, and motion everywhere.
 - **Menus** (`ui/`): an animated main menu with the logo and the three fighters, wipes between
   screens, animated fighter cards, an arena grid with a live big preview, styled pause and
   results cards with the winner on show.
+
+## Sound
+
+All sound is synthesized in code at start, on worker threads, and kept for the run (no sound
+files; `scripts/view/sounds.gd` and `sound_*.gd`). Effects play on the audio bus "SFX", music on
+"Music" (the volumes are options); a limiter on the master keeps peaks under -1 dB.
+
+- **Effects:** hits in four sizes by launch speed, block, parry, shield break, grab, armor,
+  clank, knockout, Kettle's steam, each fighter's special, jumps, landings by weight, dodges,
+  ledge grabs, respawn, the "GO!" and "GAME!" stings, a victory jingle, and the menu sounds.
+- **Music:** upbeat electronic dance music (four-on-the-floor drums, pumping bass and chords,
+  arpeggios, a lead hook) in 16-bar loops, a menu theme at 128 BPM and one adaptive match track.
+  The match music follows the highest damage of the fighters still in (0 % calm, 150 % full; more
+  when only two are left and in a last life): an energy layer fades in, and the tempo steps up
+  from 140 to 150, 160 and 172 BPM, switched on a bar line without changing the pitch. A short
+  stinger ends the match.
 
 ## Camera
 
@@ -394,8 +424,9 @@ comes later. Some keyboards cannot read many keys held at once ("ghosting"); wit
 one keyboard, up to five keys each can be held, so a cheap keyboard may drop a key now and then.
 
 **Testing aids:** F1 shows the fighters' state, their hurtboxes and hitboxes and the blast zone,
-F2 opens the tuning panel of the first player's fighter, F5 restarts the match. A help line with
-the keys shows for the first seconds of each match and with F1. F11 switches between window and
+F2 opens the tuning panel of the first player's fighter, F5 restarts the match (not under the
+pause or results menu). A help line with each player's own keys shows for the first seconds of
+each match and with F1. F11 switches between window and
 full screen.
 
 ## Game modes
@@ -464,8 +495,8 @@ docs/        this document, credits
    one extra key per player for shield and dodge, no special-move key for now. Later the same day
    the owner asked for one special move per fighter: it lies on a key of its own (section
    "Special moves"); to be confirmed by the owner. Strong (charged) attacks stay open.
-5. **Sound:** a few simple sounds generated in code for now (decided 2026-11-21); free sound packs
-   may replace them later.
+5. **Sound:** generated in code (decided 2026-11-21; the full sound and music pass 2026-11-26,
+   section "Sound"); free sound packs may replace them later.
 6. **Teams:** team mode, and whether teammates can hit each other.
 7. **Online:** peer-to-peer or a relay server; an existing Godot rollback addon or our own.
 8. **Platforms:** Windows first; web, Linux or a store release later.

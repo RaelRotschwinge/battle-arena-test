@@ -58,7 +58,8 @@ func coast(c: CanvasItem, _t: float) -> void:
 	Kit.band(c, Rect2(-2600, HORIZON - 60.0, 7120, 60.0), Color(HAZE, 0.0), Color(HAZE, 0.5))
 
 
-# Rows of wave crests, closer and bigger toward the bottom, rolling slowly.
+# Rows of wave crests, closer and bigger toward the bottom, rolling slowly. Each row is one
+# draw call (its crests as line segments): about 270 separate arcs cost a whole frame.
 func waves(c: CanvasItem, t: float) -> void:
 	for row in 9:
 		var f := row / 8.0
@@ -68,12 +69,20 @@ func waves(c: CanvasItem, t: float) -> void:
 		var shift: float = fposmod(t * (8.0 + f * 22.0) + row * 37.0, gap)
 		var x: float = -700.0 + shift
 		var k := 0
+		var lines := PackedVector2Array()
 		while x < 2620.0:
 			var bob: float = 3.0 * sin(t * 1.4 + k * 0.9 + row)
-			c.draw_arc(Vector2(x, y + bob + w * 0.5), w * 0.6, PI * 1.2, PI * 1.8, 8,
-					Color(0.9, 1.0, 1.0, 0.16 + 0.14 * f), 2.0 + f * 2.5, true)
+			var middle := Vector2(x, y + bob + w * 0.5)
+			var last := middle + Vector2.from_angle(PI * 1.2) * w * 0.6
+			for n in range(1, 5):
+				var next := middle + Vector2.from_angle(PI * (1.2 + 0.15 * n)) * w * 0.6
+				lines.append(last)
+				lines.append(next)
+				last = next
 			x += gap * (0.8 + 0.4 * Kit.rnd(k, row))
 			k += 1
+		# No extra antialiasing: the 2x supersampling smooths them, and it would double the cost.
+		c.draw_multiline(lines, Color(0.9, 1.0, 1.0, 0.16 + 0.14 * f), 2.0 + f * 2.5)
 
 
 func gulls(c: CanvasItem, t: float) -> void:

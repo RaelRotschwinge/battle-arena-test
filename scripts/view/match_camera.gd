@@ -1,8 +1,11 @@
 # One shared camera that keeps all fighters in view, zooms out as they spread and stops at the
 # edges of the blast zone (game design, "Camera"). It looks a little ahead of where the fighters
 # move, zooms out quickly and in slowly, and gives strong hits and knockouts a light shake and a
-# short zoom punch. A match opens on the whole arena and eases in to the fighters.
+# short zoom punch, both scaled by the Screen shake option. A match opens on the whole arena and
+# eases in to the fighters.
 extends Camera2D
+
+const Settings := preload("res://scripts/view/settings.gd")
 
 const MARGIN := Vector2(360.0, 240.0)
 const MIN_VIEW := Vector2(1280.0, 720.0)
@@ -53,6 +56,7 @@ func intro() -> void:
 
 
 func shake(strength: float) -> void:
+	strength *= Settings.shake_scale()
 	if strength >= _shake or _shake_ticks == 0:
 		_shake = strength
 		_shake_ticks = SHAKE_TICKS
@@ -61,6 +65,7 @@ func shake(strength: float) -> void:
 # A short zoom in by this share (0.05 is 5 %), quick in and eased back out, leaning towards the
 # world point at if given (never past the view it had before the punch).
 func punch(amount: float, at: Vector2 = Vector2.INF) -> void:
+	amount *= Settings.shake_scale()
 	if amount >= _punch or _punch_ticks == 0:
 		_punch = amount
 		_punch_ticks = PUNCH_TICKS

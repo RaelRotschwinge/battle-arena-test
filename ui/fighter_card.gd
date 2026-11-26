@@ -399,6 +399,8 @@ func _draw_live() -> void:
 		ring.append(ring[0])
 		c.draw_polyline(ring, Color(UiDraw.GOLD, 0.35 + 0.55 * pulse), 3.0, true)
 		var caption := "Press attack on it, or click the lock"
+		if device_label == "":  # Nothing to lock: every device is taken by an earlier player.
+			caption = "Every device is taken: leave with ×"
 		var width := UiDraw.text_width(caption, 18) + 28.0
 		UiDraw.panel(c, Rect2((w - width) / 2.0, 132, width, 28), 14.0, Color(0, 0, 0, 0.65),
 				Color(0, 0, 0, 0.65))
@@ -446,7 +448,7 @@ func _controls_row() -> void:
 	UiDraw.text(self, Vector2(DEVICE_LEFT.end.x, UiDraw.baseline(row.position.y, row.size.y, 23)),
 			shown, 23, Color.WHITE if locked else UiDraw.GOLD, HORIZONTAL_ALIGNMENT_CENTER, span,
 			null, 5)
-	if shown_ready:
+	if shown_ready or device_label == "":
 		return
 	for side in [-1, 1]:
 		var part := "device-" if side < 0 else "device+"

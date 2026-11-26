@@ -10,6 +10,12 @@ const TuningStore := preload("res://scripts/view/tuning_store.gd")
 const HELP := "P1: W A S D, Space attack, E special, left Shift shield     P2: arrows, Enter" \
 		+ " attack, Backspace special, right Shift shield     Esc pause     F1 info     F2 tuning" \
 		+ "     F5 restart"
+# The keys of each device for the help line.
+const DEVICE_KEYS := {
+	"kb1": "W A S D, Space attack, E special, left Shift shield",
+	"kb2": "arrows, Enter attack, Backspace special, right Shift shield",
+	"pad": "stick, A jump, X attack, B special, shoulder shield",
+}
 const HELP_SECONDS := 6.0  # The help line shows this long at the start of a match, then fades.
 
 var sim
@@ -70,6 +76,22 @@ func _fade_help(delta: float) -> void:
 	_help_time += delta
 	var fade := clampf(HELP_SECONDS - _help_time, 0.0, 1.0)
 	_help.modulate.a = 1.0 if _info.visible else fade
+
+
+# The help line for the players of this match: each human's own device keys, then the F keys; no
+# line at all when only computer players play.
+func set_players(players: Array, restart: String = "F5 restart") -> void:
+	var parts := PackedStringArray()
+	for i in players.size():
+		var player: Dictionary = players[i]
+		if player.get("cpu", 0) > 0 or player.get("device", "") == "":
+			continue
+		var device: String = player["device"]
+		parts.append("P%d: %s" % [player.get("slot", i) + 1,
+				DEVICE_KEYS.get(device, DEVICE_KEYS["pad"])])
+	_help.visible = not parts.is_empty()
+	parts.append("Esc pause   F1 info   F2 tuning   %s   F11 full screen" % restart)
+	_help.text = "     ".join(parts)
 
 
 func toggle_info() -> bool:

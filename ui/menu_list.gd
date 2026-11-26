@@ -6,6 +6,7 @@ extends VBoxContainer
 
 const Devices := preload("res://scripts/view/devices.gd")
 const UiDraw := preload("res://ui/ui_draw.gd")
+const Sounds := preload("res://scripts/view/sounds.gd")
 
 const NORMAL := Color(0.78, 0.81, 0.88)
 const SELECTED := Color("1b1e2a")  # Dark text on the gold bar.
@@ -55,18 +56,23 @@ func handle() -> int:
 	if _pressed("up"):
 		selected = posmod(selected - 1, _labels.size())
 		_refresh()
+		Sounds.cue("tick")
 	elif _pressed("down"):
 		selected = posmod(selected + 1, _labels.size())
 		_refresh()
+		Sounds.cue("tick")
 	if _pressed("confirm"):
 		_flash = 0.25
+		Sounds.cue("confirm")
 		return selected
 	if _pressed("back"):
+		Sounds.cue("back")
 		return -2
 	if _clicked >= 0:
 		var chosen := _clicked
 		_clicked = -1
 		_flash = 0.25
+		Sounds.cue("confirm")
 		return chosen
 	return -1
 
@@ -84,6 +90,7 @@ func _on_label_hover(at: int) -> void:
 	if at != selected:
 		selected = at
 		_refresh()
+		Sounds.cue("tick")
 
 
 func _pressed(action: String) -> bool:

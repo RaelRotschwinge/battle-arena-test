@@ -19,6 +19,7 @@ const FighterCard := preload("res://ui/fighter_card.gd")
 const MenuBackground := preload("res://ui/menu_background.gd")
 const DeviceSlots := preload("res://ui/device_slots.gd")
 const UiDraw := preload("res://ui/ui_draw.gd")
+const Sounds := preload("res://scripts/view/sounds.gd")
 
 const SLOTS := 4
 const COLORS := [Color("e8553e"), Color("3e8fe8"), Color("e8c33e"), Color("4ec96a")]
@@ -166,7 +167,7 @@ func _load_setup() -> void:
 	_hazards = setup.get("hazards", true)
 	for player in setup.get("players", []):
 		if player.get("cpu", 0) == 0 and Devices.has_device(player["device"]):
-			var i := _devices.press(player["device"], Devices.all())
+			var i := _devices.place(player.get("slot", -1), player["device"], Devices.all())
 			if i >= 0:
 				_slots[i] = {"device": player["device"], "fighter": player["fighter"],
 						"ready": false}
@@ -174,11 +175,12 @@ func _load_setup() -> void:
 
 
 func _physics_process(_delta: float) -> void:
+	var before := _sound_state()
 	var all := Devices.all()
 	_devices.forget_missing(all)
 	var picks: Array = Roster.ids() + ["random"]
 	for device in all:
-		var slot := _devices.owner_of(device)
+		var slot := _devices.steering(device)
 		if slot < 0:
 			if Devices.pressed(device, "confirm"):
 				_devices.press(device, all)
@@ -188,6 +190,10 @@ func _physics_process(_delta: float) -> void:
 				return
 			continue
 		var player: Dictionary = _slots[slot]
+		if not _devices.locked(slot) and Devices.pressed(device, "confirm"):
+			_devices.press(device, all)  # Opened by mistake: its old device locks it again.
+			_sync()
+			continue
 		if not player["ready"]:
 			if Devices.pressed(device, "up") or Devices.pressed(device, "down"):
 				_focus[slot] = 1 - _focus[slot]
@@ -199,11 +205,11 @@ func _physics_process(_delta: float) -> void:
 					_devices.cycle(slot, step, all)  # Open now: attack on the new one locks it.
 			elif Devices.pressed(device, "confirm"):
 				player["ready"] = true
-			elif Devices.pressed(device, "back"):
+			elif Devices.pressed(device, "leave"):
 				if _leave(slot):
 					return
 		else:
-			if Devices.pressed(device, "back"):
+			if Devices.pressed(device, "leave"):
 				player["ready"] = false
 			elif Devices.pressed(device, "up"):
 				_row = posmod(_row - 1, ROWS.size())
@@ -218,6 +224,7 @@ func _physics_process(_delta: float) -> void:
 				return
 		_sync()
 	_sync()
+	_sound_changes(before)
 	_refresh()
 
 
@@ -256,12 +263,13 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	var step := 1 if click.button_index == MOUSE_BUTTON_LEFT else -1
 	var at := click.position
+	var before := _sound_state()
 	var chip := _rules.chip_at(at - _rules.position)
 	if chip >= 0:
 		_row = chip
 		_change(step)
 	elif START.has_point(at):
-		if _can_start():
+		if step == 1 and _can_start():
 			_start()
 			return
 	elif step == 1:
@@ -272,6 +280,7 @@ func _gui_input(event: InputEvent) -> void:
 					return
 				break
 	_sync()
+	_sound_changes(before)
 	_refresh()
 	accept_event()
 
@@ -325,17 +334,52 @@ func _can_start() -> bool:
 	return true
 
 
+# The players in panel order, each with its panel ("slot"), so number and color stay the same in
+# the arena select and the match. Computer players take the first empty panels, as shown.
 func _start() -> void:
 	var players := []
-	for slot in _slots:
+	var cpu_fighters := _cpu_fighters()
+	for i in SLOTS:
+		var slot: Dictionary = _slots[i]
 		if not slot.is_empty():
-			players.append({"device": slot["device"], "cpu": 0, "fighter": slot["fighter"]})
-	for fighter in _cpu_fighters():
-		players.append({"device": "", "cpu": _cpu_level, "fighter": fighter})
+			players.append({"device": slot["device"], "cpu": 0, "fighter": slot["fighter"],
+					"slot": i})
+		elif not cpu_fighters.is_empty():
+			players.append({"device": "", "cpu": _cpu_level, "fighter": cpu_fighters.pop_front(),
+					"slot": i})
 	var next := setup.duplicate(true)
 	next.merge({"players": players, "stocks": _stocks, "cpus": _cpus, "cpu_level": _cpu_level,
 			"hazards": _hazards}, true)
+	Sounds.cue("confirm")
 	app.show_arena_select(next)
+
+
+# What the select sounds follow: how many joined, locked and are ready, the picks, the rules.
+func _sound_state() -> Array:
+	var counts := [0, 0, 0]
+	var picks := []
+	for i in SLOTS:
+		counts[0] += 1 if _devices.joined(i) else 0
+		counts[1] += 1 if _devices.locked(i) else 0
+		if not _slots[i].is_empty():
+			counts[2] += 1 if _slots[i]["ready"] else 0
+			picks.append([_slots[i]["fighter"], _slots[i]["device"]])
+	return [counts, picks, [_stocks, _cpus, _cpu_level, _hazards, _row], _focus.duplicate()]
+
+
+# One sound for what this tick changed: a join, a step back, ready, a lock, or any other change.
+func _sound_changes(before: Array) -> void:
+	var now := _sound_state()
+	if now[0][0] > before[0][0]:
+		Sounds.cue("join")
+	elif now[0][0] < before[0][0] or now[0][2] < before[0][2]:
+		Sounds.cue("back")
+	elif now[0][2] > before[0][2]:
+		Sounds.cue("ready")
+	elif now[0][1] > before[0][1]:
+		Sounds.cue("lock")
+	elif now != before:
+		Sounds.cue("tick")
 
 
 # The fighters of the computer players: in roster order, first the ones no player picked.

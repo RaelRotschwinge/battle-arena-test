@@ -3,11 +3,13 @@
 # of the shapes and texts drawn in code (the Compatibility renderer has no 2D MSAA). The game
 # itself (scenes/main.tscn) runs inside it laid out for 1920 x 1080 as before (expand). Input
 # events are passed on; gamepads and held keys are read globally and need nothing. On top lies
-# the color grade (screen_fx.gd). F11 switches between window and full screen.
+# the color grade (screen_fx.gd). The saved options are applied at start (settings.gd); F11
+# switches between window and full screen and saves that as the Full screen option.
 extends Node
 
 const GAME := preload("res://scenes/main.tscn")
 const ScreenFx := preload("res://scripts/view/screen_fx.gd")
+const Settings := preload("res://scripts/view/settings.gd")
 const BASE := Vector2(1920.0, 1080.0)
 const MAX_PIXELS := 3840.0 * 2160.0  # Bigger windows get a smaller factor, to bound the cost.
 
@@ -36,6 +38,7 @@ func _ready() -> void:
 	add_child(_view)
 	window.size_changed.connect(_fit)
 	_fit()
+	Settings.apply()
 
 
 # Follows the window: the drawing size is the window's pixels times the factor, the layout stays
@@ -60,8 +63,7 @@ func _input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo and key.physical_keycode == KEY_F11:
 		var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full
-				else DisplayServer.WINDOW_MODE_FULLSCREEN)
+		Settings.change("fullscreen", not full)
 		return
 	var passed := event
 	if event is InputEventMouse:

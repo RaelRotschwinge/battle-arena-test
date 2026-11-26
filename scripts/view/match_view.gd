@@ -20,6 +20,7 @@ const Hud := preload("res://scripts/view/hud.gd")
 const DebugUi := preload("res://scripts/view/debug_ui.gd")
 const TuningStore := preload("res://scripts/view/tuning_store.gd")
 const Sounds := preload("res://scripts/view/sounds.gd")
+const SoundCues := preload("res://scripts/view/sound_cues.gd")
 const Overlay := preload("res://ui/overlay.gd")
 
 const PLAYER_COLORS := [Color("e8553e"), Color("3e8fe8"), Color("e8c33e"), Color("4ec96a")]
@@ -45,11 +46,13 @@ var _camera
 var _hud
 var _ui
 var _sounds
+var _cues  # Plays what the fighters do: jumps, landings, specials (sound_cues.gd).
 var _pause
 var _results
 var _fighter_views := []
 var _shot_view
-var _fighter_ids := []  # Per fighter: the roster id it plays this match (random rolled).
+var _fighter_ids := []
+var _colors := []  # Per fighter: its player's color, by the panel it was picked in.  # Per fighter: the roster id it plays this match (random rolled).
 var _cpus := []  # Per fighter: a computer player or null.
 var _last_jumps := []  # Per fighter: its jumps left in the last tick, to see a jump in the air.
 var _show_boxes := false
@@ -84,8 +87,10 @@ func _ready() -> void:
 	_ui = DebugUi.new()
 	_ui.layer = 3  # The info overlay and tuning panel stay above the HUD (layer 2).
 	add_child(_ui)
-	_sounds = Sounds.new()
-	add_child(_sounds)
+	_sounds = Sounds.main()
+	if _sounds == null:  # Run alone: the match brings its own.
+		_sounds = Sounds.new()
+		add_child(_sounds)
 	_pause = Overlay.new()
 	add_child(_pause)
 	_results = Overlay.new()
@@ -116,7 +121,8 @@ func _physics_process(_delta: float) -> void:
 	for event in sim.events:
 		_show_event(event)
 	_fighter_effects()
-	_special_sounds()
+	_cues.watch(sim, _fighter_ids, _sounds)
+	_lift_tags()
 	for view in _fighter_views:
 		view.sync()
 	_shot_view.sync()
@@ -126,7 +132,8 @@ func _physics_process(_delta: float) -> void:
 	if sim.over:
 		_over_ticks = 0
 		_hud.show_winner(false)
-		_sounds.play("win")
+		_sounds.play("game")
+		_sounds.stinger()
 		for event in sim.events:
 			if event["type"] == "ko":  # The final knockout: lean in and slow the view down.
 				_camera.punch(0.14, event["position"])
@@ -168,43 +175,43 @@ func _show_event(event: Dictionary) -> void:
 			var target = sim.fighters[event["target"]]
 			# Right after the hit the target's velocity is its launch, before the hit pause ends.
 			_effects.add_hit(event["position"], speed, target.velocity.normalized())
-			_sounds.play("hit", speed)
+			_sounds.hit(speed)
 			if speed >= SHAKE_SPEED:
 				_camera.shake(minf(speed * 0.35, 13.0))
-				_back_effects.add_trail(target, PLAYER_COLORS[event["target"]])
+				_back_effects.add_trail(target, _colors[event["target"]])
 			if speed >= PUNCH_SPEED:
 				_camera.punch(clampf((speed - PUNCH_SPEED) / 400.0 + 0.03, 0.03, 0.06))
 				_hud.flash(Color.WHITE, clampf(speed / 200.0, 0.1, 0.22))
 		"block":
-			_effects.add_block(event["position"], PLAYER_COLORS[event["target"]])
+			_effects.add_block(event["position"], _colors[event["target"]])
 			_sounds.play("block")
 		"parry":
 			_effects.add_parry(event["position"])
 			_sounds.play("parry")
 			_hud.flash(Color("b8f2ff"), 0.12)
 		"break":
-			_effects.add_break(event["position"], PLAYER_COLORS[event["target"]])
+			_effects.add_break(event["position"], _colors[event["target"]])
 			_sounds.play("break")
 			_camera.shake(10.0)
 			_camera.punch(0.04)
 		"grab":
-			_effects.add_grab(event["position"], PLAYER_COLORS[event["attacker"]])
+			_effects.add_grab(event["position"], _colors[event["attacker"]])
 			_sounds.play("grab")
 		"armor":
 			_effects.add_armor(event["position"])
-			_sounds.play("block")
+			_sounds.play("armor")
 		"clank":
 			_effects.add_clank(event["position"])
-			_sounds.play("block")
+			_sounds.play("clank")
 		"ko":
 			var i: int = event["fighter"]
-			_effects.add_ko(event["position"], PLAYER_COLORS[i], sim.arena.blast_zone.get_center())
+			_effects.add_ko(event["position"], _colors[i], sim.arena.blast_zone.get_center())
 			_sounds.play("ko")
 			_camera.shake(13.0)
 			_camera.punch(0.07)
-			_hud.flash(PLAYER_COLORS[i].lightened(0.5), 0.28)
+			_hud.flash(_colors[i].lightened(0.5), 0.28)
 			if not sim.fighters[i].out:  # It is back on the respawn platform already.
-				_back_effects.add_respawn(sim.fighters[i].position, PLAYER_COLORS[i])
+				_back_effects.add_respawn(sim.fighters[i].position, _colors[i])
 
 
 # Run dust behind running fighters and a ring under every jump in the air.
@@ -221,16 +228,19 @@ func _fighter_effects() -> void:
 		_last_jumps[i] = f.jumps_left
 
 
-# A special starting and a vent bursting have their own sound.
-func _special_sounds() -> void:
-	for f in sim.fighters:
-		if f.attack.begins_with("special") and f.attack_ticks == 1 and f.hitlag == 0:
-			_sounds.play("special")
-	if sim.arena.has_hazards():
-		for v in sim.arena.VENTS.size():
-			var phase: Array = sim.arena.vent_phase(v)
-			if phase[0] == "burst" and phase[1] == 0:
-				_sounds.play("steam")
+# Name tags of fighters standing close would cover each other: each one that overlaps a tag
+# already placed moves up a row.
+func _lift_tags() -> void:
+	var placed := []  # Per tag: [x, top y].
+	for view in _fighter_views:
+		var f = view.fighter
+		var top: float = f.position.y - f.stats.height
+		var lift := 0.0
+		for other in placed:
+			if absf(other[0] - f.position.x) < 110.0 and absf(other[1] - (top - lift)) < 40.0:
+				lift += 40.0
+		view.tag_lift = lerpf(view.tag_lift, lift, 0.3)
+		placed.append([f.position.x, top - lift])
 
 
 # The winner shows for a moment, then the results screen.
@@ -243,7 +253,8 @@ func _after_match() -> void:
 		_slow_motion(false)
 		_hud.hide_winner()
 		_results.show_menu(_winner_text(), _stats_text(), ["Rematch", "Change fighters",
-				"Main menu"], "", PLAYER_COLORS[sim.winner] if sim.winner >= 0 else Color.WHITE)
+				"Main menu"], "", _colors[sim.winner] if sim.winner >= 0 else Color.WHITE)
+		_sounds.play("victory")
 		Devices.swallow()
 
 
@@ -347,6 +358,7 @@ func _start() -> void:
 	sim = MatchSim.new(arena, players.size(), all_stats,
 			setup.get("stocks", MatchSim.DEFAULT_STOCKS))
 	_cpus.clear()
+	_colors.clear()
 	var labels := []
 	var cpu_count := 0
 	for i in players.size():
@@ -354,7 +366,9 @@ func _start() -> void:
 		_cpus.append(CpuPlayer.new(level, i, _seed * 31 + i) if level > 0 else null)
 		if level > 0:
 			cpu_count += 1
-		labels.append("CPU %d" % cpu_count if level > 0 else "P%d" % (i + 1))
+		var slot: int = players[i].get("slot", i)  # The fighter select panel: number and color.
+		labels.append("CPU %d" % cpu_count if level > 0 else "P%d" % (slot + 1))
+		_colors.append(PLAYER_COLORS[slot % PLAYER_COLORS.size()])
 	_arena_view.arena = sim.arena
 	_arena_view.queue_redraw()
 	_effects.clear()
@@ -365,7 +379,7 @@ func _start() -> void:
 	for i in players.size():
 		var view := FighterView.new()
 		view.fighter = sim.fighters[i]
-		view.color = PLAYER_COLORS[i]
+		view.color = _colors[i]
 		view.label = labels[i]
 		view.effects = _effects
 		view.show_boxes = _show_boxes
@@ -385,8 +399,14 @@ func _start() -> void:
 	_slow_motion(false)
 	_hud.sim = sim
 	_hud.labels = labels
+	_hud.colors = _colors
+	_shot_view.colors = _colors
 	_hud.reset()
+	_cues = SoundCues.new()
+	_sounds.play("go")
+	_sounds.music("match")
 	_ui.sim = sim
+	_ui.set_players(players)
 	_ui.stats = all_stats[0]
 	_ui.fighter_id = _fighter_ids[0]
 	_over_ticks = 0

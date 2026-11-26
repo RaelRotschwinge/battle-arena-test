@@ -15,6 +15,7 @@ const UiDraw := preload("res://ui/ui_draw.gd")
 const Roster := preload("res://fighters/roster.gd")
 const FighterState := preload("res://scripts/sim/fighter_state.gd")
 const FighterFigure := preload("res://ui/fighter_figure.gd")
+const Sounds := preload("res://scripts/view/sounds.gd")
 
 const COLUMNS := 3
 const TILE := Vector2(196, 110)
@@ -159,6 +160,7 @@ func _physics_process(_delta: float) -> void:
 			_start()
 			return
 		elif Devices.pressed(device, "back"):
+			Sounds.cue("back")
 			app.show_select()
 			return
 	_refresh()
@@ -181,12 +183,15 @@ func _start() -> void:
 	var match_setup := setup.duplicate(true)
 	match_setup["arena"] = arena
 	match_setup["arena_choice"] = choice
+	Sounds.cue("confirm")
 	app.start_match(match_setup)
 
 
 func _refresh() -> void:
 	if _at == _shown:
 		return
+	if _shown >= 0:  # Not for the first arena shown.
+		Sounds.cue("arena")
 	_shown = _at
 	_since_change = 0.0
 	var id: String = _ids[_at]
@@ -230,6 +235,7 @@ func _gui_input(event: InputEvent) -> void:
 	accept_event()
 	var part := _part_at(click.position)
 	if part == "back":
+		Sounds.cue("back")
 		app.show_select()
 	elif part == "fight":
 		_start()
@@ -359,8 +365,9 @@ func _match_card(players: Array) -> void:
 			cpu += 1
 		var id: String = player.get("fighter", "")
 		var x := MATCH_CARD.position.x + MATCH_CARD.size.x * (i + 0.5) / players.size()
-		var color: Color = UiDraw.PLAYER_COLORS[i % UiDraw.PLAYER_COLORS.size()]
-		_roster.append(["CPU %d" % cpu if level > 0 else "P%d" % (i + 1),
+		var slot: int = player.get("slot", i)  # The fighter select panel: number and color.
+		var color: Color = UiDraw.PLAYER_COLORS[slot % UiDraw.PLAYER_COLORS.size()]
+		_roster.append(["CPU %d" % cpu if level > 0 else "P%d" % (slot + 1),
 				"Random" if id == "random" else Roster.display_name(id), color, x, id])
 		if id == "random":
 			continue
